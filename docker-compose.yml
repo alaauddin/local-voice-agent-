@@ -1,0 +1,68 @@
+name: sunset-kiosk
+
+x-app: &app
+  build:
+    context: .
+    network: host
+    args:
+      APP_UID: ${APP_UID:-1000}
+      APP_GID: ${APP_GID:-1000}
+  image: sunset-kiosk:local
+  env_file:
+    - .env
+  environment:
+    REDIS_URL: redis://redis:6379/0
+    SQLITE_PATH: /app/data/db.sqlite3
+  volumes:
+    - ./db.sqlite3:/app/data/db.sqlite3
+  init: true
+  restart: unless-stopped
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    <<: *app
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SQLITE_PATH: /app/data/db.sqlite3
+      RUN_MIGRATIONS: "1"
+    ports:
+      - "127.0.0.1:8008:8008"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/api/v1/kiosk/health/', timeout=5)"
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 20s
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "wazen_local", "worker", "--loglevel=INFO", "--concurrency=1", "--pool=solo"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    stop_grace_period: 30s
+
+volumes:
+  redis_data:

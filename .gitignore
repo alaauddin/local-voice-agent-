@@ -216,3 +216,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project specific
+.venv/
+.env
+.env.*
+!.env.example
+.mypy_cache/
+.ruff_cache/
+media/
+staticfiles/*
+!staticfiles/.gitkeep
+celerybeat-schedule
+celerybeat.pid
+.DS_Store
+.idea/
+.vscode/

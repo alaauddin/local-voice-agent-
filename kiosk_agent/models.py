@@ -1,0 +1,104 @@
+import uuid
+
+from django.core.exceptions import ValidationError
+from django.db import models
+
+
+class ChaletConfig(models.Model):
+    """The one local chalet identity and its concierge configuration."""
+
+    SINGLETON_PK = 1
+    id = models.PositiveSmallIntegerField(primary_key=True, default=SINGLETON_PK, editable=False)
+    chalet_name = models.CharField(max_length=120, default="منتجع الغروب")
+    chalet_number = models.CharField(max_length=30, default="101")
+    persona_name = models.CharField(max_length=80, default="غروب")
+    welcome_message = models.TextField(
+        blank=True,
+        default="قل «يا غروب» واطلب ما تحتاجه، وسأبقى معك طوال المحادثة.",
+    )
+    property_facts = models.JSONField(default=dict, blank=True)
+    enabled_services = models.JSONField(default=list, blank=True)
+    emergency_contact = models.CharField(max_length=120, blank=True)
+    llm_model = models.CharField(max_length=100, blank=True)
+    saas_integration_url = models.URLField(max_length=500, blank=True, help_text="Full SaaS endpoint URL, e.g. https://tenant.raddadoman.com/api/kiosk/requests/")
+    saas_integration_token = models.CharField(max_length=500, blank=True, help_text="X-Kiosk-Token / X-API-Key for SaaS")
+    saas_tenant_subdomain = models.CharField(max_length=63, blank=True, help_text="Tenant subdomain if SaaS URL is public schema")
+    saas_enabled = models.BooleanField(default=False)
+    saas_timeout_seconds = models.FloatField(default=5.0)
+    current_stay_id = models.UUIDField(default=uuid.uuid4, editable=False, db_index=True)
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        if self.pk not in (None, self.SINGLETON_PK):
+            raise ValidationError("Only one ChaletConfig row is allowed.")
+
+    def save(self, *args, **kwargs):
+        self.pk = self.SINGLETON_PK
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=cls.SINGLETON_PK)
+        return obj
+
+    def rotate_stay(self):
+        self.current_stay_id = uuid.uuid4()
+        self.save(update_fields=["current_stay_id", "updated_at"])
+
+    def __str__(self):
+        return f"{self.chalet_name} ({self.chalet_number})"
+
+
+class KioskMessage(models.Model):
+    class Role(models.TextChoices):
+        SYSTEM = "system", "System"
+        USER = "user", "User"
+        ASSISTANT = "assistant", "Assistant"
+        TOOL = "tool", "Tool"
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        STREAMING = "streaming", "Streaming"
+        COMPLETE = "complete", "Complete"
+        FAILED = "failed", "Failed"
+
+    stay_id = models.UUIDField(db_index=True)
+    request_id = models.UUIDField(default=uuid.uuid4, db_index=True)
+    role = models.CharField(max_length=16, choices=Role.choices)
+    content = models.TextField(blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.COMPLETE)
+    tool_name = models.CharField(max_length=100, blank=True)
+    tool_call_id = models.CharField(max_length=160, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        indexes = [models.Index(fields=("stay_id", "created_at"))]
+
+    def __str__(self):
+        return f"{self.role}: {self.content[:60]}"
+
+
+class KioskAuditLog(models.Model):
+    class Event(models.TextChoices):
+        CHAT_QUEUED = "chat_queued", "Chat queued"
+        AGENT_STARTED = "agent_started", "Agent started"
+        TOOL_CALLED = "tool_called", "Tool called"
+        AGENT_COMPLETED = "agent_completed", "Agent completed"
+        AGENT_FAILED = "agent_failed", "Agent failed"
+        STAY_RESET = "stay_reset", "Stay reset"
+
+    stay_id = models.UUIDField(db_index=True)
+    request_id = models.UUIDField(null=True, blank=True, db_index=True)
+    event = models.CharField(max_length=40, choices=Event.choices)
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.event} at {self.created_at}"

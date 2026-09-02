@@ -1,0 +1,141 @@
+{% load static %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#72c7c0">
+  <meta name="voice-wake-word" content="{{ voice_wake_word }}">
+  <meta name="voice-source" content="{{ voice_source }}">
+  <title>غروب | المساعد الذكي للشاليهات</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=sunset-voice-3">
+</head>
+<body>
+  <main class="kiosk-shell">
+    <section class="brand-panel" aria-label="معلومات الشاليه">
+      <div class="brand-lockup" aria-label="Sunset Resort منتجع الغروب">
+        <div class="sunset-wordmark" dir="ltr"><span>sun</span><b>S</b><span>et</span></div>
+        <small>Sunset Resort · منتجع الغروب</small>
+      </div>
+      <div class="brand-copy">
+        <p class="eyebrow">رفيقك الذكي لخدمة الشاليه</p>
+        <h1>مساعد غروب<br>الذكي للشاليهات</h1>
+        <p class="property-name" id="chaletName">منتجع الغروب</p>
+        <p id="personaIntro">اطلب ما تحتاجه بصوتك، وغروب في خدمتك.</p>
+      </div>
+      <div class="connection-pill" id="connectionPill" role="status">
+        <span class="connection-dot"></span>
+        <span id="connectionText">جاري الاتصال…</span>
+      </div>
+      <button class="reset-button" id="resetButton" type="button" title="مسح المحادثة عند المغادرة">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M20 20v-6h-6M5.2 15a8 8 0 0 0 13.1 2M18.8 9A8 8 0 0 0 5.7 7"/></svg>
+        إنهاء الإقامة
+      </button>
+      <p class="privacy-note">تُمسح المحادثة بالكامل عند إنهاء الإقامة حفاظاً على خصوصيتك.</p>
+    </section>
+
+    <section class="chat-panel" aria-label="محادثة الكونسيرج">
+      <header class="mobile-header">
+        <div>
+          <small>Sunset Resort · منتجع الغروب</small>
+          <strong id="mobilePersona">غروب في خدمتك</strong>
+        </div>
+        <span class="mobile-status" id="mobileStatus"></span>
+      </header>
+
+      <button class="voice-settings-button" id="voiceSettingsButton" type="button" aria-label="إعدادات الصوت" title="إعدادات الصوت">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+      </button>
+
+      <button class="messages-toggle" id="messagesToggle" type="button" aria-label="عرض المحادثة" aria-expanded="false" title="عرض المحادثة">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-1-2V7a2 2 0 0 1 2-2Z"/><path d="M8 10h8M8 13h5"/></svg>
+        <span id="messageCount" hidden>0</span>
+      </button>
+
+      <div class="voice-canvas">
+        <div class="welcome" id="welcomeCard">
+          <div class="avatar-stage" id="avatarStage" data-state="idle">
+            <video class="avatar-video active" data-avatar-state="idle" src="{% static 'kiosk_agent/videos/idle.mp4' %}" autoplay muted loop playsinline preload="auto"></video>
+            <video class="avatar-video" data-avatar-state="thinking" src="{% static 'kiosk_agent/videos/thinking.mp4' %}" muted loop playsinline preload="auto"></video>
+            <video class="avatar-video" data-avatar-state="speaking" src="{% static 'kiosk_agent/videos/speaking.mp4' %}" muted loop playsinline preload="auto"></video>
+            <div class="avatar-glow"></div>
+          </div>
+          <button class="mic-button" id="micButton" type="button" aria-label="ابدأ التحدث">
+            <span class="mic-ring ring-one"></span>
+            <span class="mic-ring ring-two"></span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
+          </button>
+          <p class="voice-status" id="voiceStatus">قل «{{ voice_wake_word }}» لبدء المحادثة</p>
+          <p class="interim-transcript" id="interimTranscript" dir="auto"></p>
+          <h2>مرحباً بك في منتجع الغروب</h2>
+          <p id="welcomeMessage">قل «يا غروب» واطلب ما تحتاجه، وسأبقى معك طوال المحادثة.</p>
+          <div class="suggestions" id="suggestions">
+            <button type="button" data-message="أحتاج بطاقة واي فاي"><span>⌁</span> بطاقات الواي فاي</button>
+            <button type="button" data-message="ما مرافق المنتجع المتاحة؟"><span>♧</span> مرافق المنتجع</button>
+            <button type="button" data-message="أحتاج خدمة للشاليه"><span>⌂</span> خدمات الشاليه</button>
+            <button type="button" data-message="ما الأنشطة المتاحة؟"><span>◌</span> الأنشطة</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="messages-drawer" id="messagesDrawer" aria-hidden="true">
+        <header>
+          <div><small>سجل المحادثة</small><strong>محادثتك مع غروب</strong></div>
+          <button id="closeMessages" type="button" aria-label="إغلاق المحادثة">×</button>
+        </header>
+        <div class="messages" id="messages" aria-live="polite" aria-relevant="additions"></div>
+      </aside>
+
+      <div class="activity" id="activity" hidden>
+        <span></span><span></span><span></span>
+        <p id="activityText">يجهّز لك الرد…</p>
+      </div>
+
+      <form class="composer" id="chatForm">
+        <label class="sr-only" for="messageInput">اكتب رسالتك</label>
+        <textarea id="messageInput" rows="1" maxlength="4000" placeholder="كيف يمكنني خدمتك؟" autocomplete="off"></textarea>
+        <button id="sendButton" type="submit" aria-label="إرسال الرسالة" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-6-8-2Z"/><path d="m12 14 8-10"/></svg>
+        </button>
+      </form>
+      <p class="composer-hint">اضغط Enter للإرسال، وShift + Enter لسطر جديد</p>
+    </section>
+  </main>
+
+  <dialog id="resetDialog">
+    <div class="dialog-icon">✓</div>
+    <h2>هل انتهت الإقامة؟</h2>
+    <p>سيتم حذف جميع رسائل هذه الإقامة نهائياً وبدء جلسة جديدة للضيف القادم.</p>
+    <div class="dialog-actions">
+      <button type="button" id="cancelReset">العودة</button>
+      <button type="button" id="confirmReset">نعم، امسح المحادثة</button>
+    </div>
+  </dialog>
+
+  <dialog id="voiceSettingsDialog" class="settings-dialog">
+    <h2>إعدادات الصوت</h2>
+    <p>تعمل غروب بصوت مباشر منخفض التأخير، ويُستخدم صوت الجهاز تلقائياً عند تعذر الاتصال.</p>
+    <label class="setting-toggle">
+      <span>تفعيل الصوت الاحتياطي</span>
+      <input id="fallbackEnabled" type="checkbox" checked>
+    </label>
+    <label class="setting-field">
+      <span>صوت الجهاز</span>
+      <select id="browserVoice"></select>
+    </label>
+    <label class="setting-field">
+      <span>سرعة النطق <output id="speechRateValue">1.1</output></span>
+      <input id="speechRate" type="range" min="0.7" max="1.8" step="0.1" value="1.1">
+    </label>
+    <div class="dialog-actions">
+      <button type="button" id="testVoice">تجربة الصوت</button>
+      <button type="button" id="closeVoiceSettings">تم</button>
+    </div>
+  </dialog>
+
+  <script src="{% static 'kiosk_agent/chat.js' %}?v=sunset-realtime-4" defer></script>
+</body>
+</html>
