@@ -65,14 +65,30 @@ class ToolCallBuffer:
     arguments: str = ""
 
 
-async def run_agent(*, stay_id: str, request_id: str) -> str:
+async def run_agent(*, stay_id: str, request_id: str, client: AsyncOpenAI | None = None) -> str:
     if not settings.OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not configured.")
 
     config, history = await _load_context(stay_id)
     model = config.llm_model or settings.OPENAI_MODEL
     messages: list[dict] = [{"role": "system", "content": build_system_prompt(config)}, *history]
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    owns_client = client is None
+    if client is None:
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    try:
+        return await _run_agent_with_client(
+            client=client,
+            stay_id=stay_id,
+            request_id=request_id,
+            model=model,
+            messages=messages,
+        )
+    finally:
+        if owns_client:
+            await client.close()
+
+
+async def _run_agent_with_client(*, client: AsyncOpenAI, stay_id: str, request_id: str, model: str, messages: list[dict]) -> str:
     await publish(stay_id, "status", request_id, status="thinking")
 
     for iteration in range(1, MAX_ITERATIONS + 1):
@@ -127,7 +143,12 @@ async def run_agent(*, stay_id: str, request_id: str) -> str:
 
         for call in (tool_buffers[index] for index in sorted(tool_buffers)):
             await publish(stay_id, "tool_status", request_id, tool=call.name, status="running")
-            result = await execute_tool(call.name, call.arguments, stay_id=stay_id, request_id=request_id)
+            result = await sync_to_async(execute_tool, thread_sensitive=True)(
+                call.name,
+                call.arguments,
+                stay_id=stay_id,
+                request_id=request_id,
+            )
             await _save_message(
                 stay_id=stay_id,
                 request_id=request_id,

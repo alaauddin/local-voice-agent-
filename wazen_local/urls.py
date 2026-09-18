@@ -7,6 +7,7 @@ from kiosk_agent.views import KioskPageView
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="kiosk-chat", permanent=False)),
     path("chat/", KioskPageView.as_view(), name="kiosk-chat"),
+    path("favicon.ico", RedirectView.as_view(url="/static/kiosk_agent/videos/poster.svg", permanent=True)),
     path("admin/", admin.site.urls),
     path("api/v1/kiosk/", include("kiosk_agent.urls")),
 ]

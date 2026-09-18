@@ -13,22 +13,43 @@ x-app: &app
   environment:
     REDIS_URL: redis://redis:6379/0
     SQLITE_PATH: /app/data/db.sqlite3
+    PYTHONOPTIMIZE: "1"
+    MALLOC_TRIM_THRESHOLD_: "100000"
   volumes:
     - ./db.sqlite3:/app/data/db.sqlite3
   init: true
   restart: unless-stopped
+  cpus: 0.5
+  mem_limit: 256m
+  mem_reservation: 128m
+  pids_limit: 128
+  logging:
+    driver: json-file
+    options:
+      max-size: "5m"
+      max-file: "2"
 
 services:
   redis:
     image: redis:7.4-alpine
-    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no", "--hz", "10"]
     volumes:
       - redis_data:/data
+    cpus: 0.25
+    mem_limit: 96m
+    mem_reservation: 64m
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "2"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
-      retries: 10
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   web:
@@ -37,32 +58,33 @@ services:
       REDIS_URL: redis://redis:6379/0
       SQLITE_PATH: /app/data/db.sqlite3
       RUN_MIGRATIONS: "1"
+      PYTHONOPTIMIZE: "1"
+      WEB_CONCURRENCY: "1"
     ports:
       - "127.0.0.1:8008:8008"
     depends_on:
       redis:
         condition: service_healthy
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/api/v1/kiosk/health/', timeout=5)"
-      interval: 10s
-      timeout: 6s
-      retries: 12
-      start_period: 20s
-    stop_grace_period: 20s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/api/v1/kiosk/health/', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    stop_grace_period: 15s
 
   worker:
     <<: *app
-    command: ["celery", "-A", "wazen_local", "worker", "--loglevel=INFO", "--concurrency=1", "--pool=solo"]
+    command: ["celery", "-A", "wazen_local", "worker", "--loglevel=INFO", "--concurrency=1", "--pool=solo", "--without-heartbeat", "--without-gossip", "--without-mingle"]
+    cpus: 0.25
+    mem_limit: 200m
+    mem_reservation: 96m
     depends_on:
       redis:
         condition: service_healthy
       web:
         condition: service_healthy
-    stop_grace_period: 30s
+    stop_grace_period: 20s
 
 volumes:
   redis_data:

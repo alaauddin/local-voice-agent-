@@ -301,8 +301,21 @@ button { cursor: pointer; }
 .composer button svg { width: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transform: scaleX(-1); }
 .composer-hint { margin: 8px auto 16px; color: #a2aaa8; text-align: center; font-size: 9px; }
 
-dialog { width: min(440px, calc(100% - 36px)); padding: 35px; color: var(--ink); text-align: center; border: 0; border-radius: 26px; box-shadow: 0 30px 90px rgba(17,43,39,.3); }
+dialog { width: min(440px, calc(100% - 36px)); padding: 35px; color: var(--ink); text-align: center; border: 0; border-radius: 26px; box-shadow: 0 30px 90px rgba(17,43,39,.3); max-height: 90vh; max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; }
 dialog::backdrop { background: rgba(10,25,22,.64); backdrop-filter: blur(5px); }
+#voiceSettingsDialog[open] { display: block; }
+#voiceSettingsDialog .setting-toggle,
+#voiceSettingsDialog .setting-field,
+#voiceSettingsDialog .setting-field select,
+#voiceSettingsDialog .setting-field input[type="range"],
+#voiceSettingsDialog #fallbackEnabled,
+#voiceSettingsDialog #preferredMic,
+#voiceSettingsDialog #browserVoice,
+#voiceSettingsDialog #speechRate,
+#voiceSettingsDialog #speechRateValue,
+#voiceSettingsDialog #testVoice,
+#voiceSettingsDialog #closeVoiceSettings { opacity: 1; visibility: visible; pointer-events: auto; color: var(--ink); }
+#voiceSettingsDialog select, #voiceSettingsDialog input[type="range"] { width: 100%; touch-action: manipulation; }
 .dialog-icon { width: 50px; height: 50px; margin: auto; display: grid; place-items: center; color: var(--gold); border: 1px solid #decfb3; border-radius: 50%; }
 dialog h2 { margin: 18px 0 8px; }
 dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
@@ -351,3 +364,12 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }
+.messages{content-visibility:auto;contain-intrinsic-size:1px 400px}
+.avatar-video{will-change:opacity;contain:layout paint}
+.mic-button,.messages-toggle,.voice-settings-button{will-change:transform}
+.kiosk-shell{contain:layout}
+@media (max-width:800px){.avatar-stage{contain:layout paint}}
+html{scrollbar-gutter:stable}
+.kiosk-shell{padding-bottom:env(safe-area-inset-bottom)}
+.composer-hint{padding-bottom:env(safe-area-inset-bottom)}
+@media (max-resolution:1dppx){.brand-panel,.chat-panel{background-image:none}.avatar-stage{box-shadow:0 8px 20px rgba(77,133,128,.14)}}

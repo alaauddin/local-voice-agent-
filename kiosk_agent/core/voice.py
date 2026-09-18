@@ -102,7 +102,9 @@ async def _synthesize_chunk(
         )
 
 
-async def generate_and_publish_tts(*, text: str, stay_id: str, request_id: str) -> None:
+async def generate_and_publish_tts(
+    *, text: str, stay_id: str, request_id: str, client: AsyncOpenAI | None = None
+) -> None:
     clean = clean_spoken_text(text)
     if not clean or settings.VOICE_SOURCE == "off":
         return
@@ -122,7 +124,10 @@ async def generate_and_publish_tts(*, text: str, stay_id: str, request_id: str) 
         total=len(chunks),
     )
     semaphore = asyncio.Semaphore(3)
-    async with AsyncOpenAI(api_key=settings.OPENAI_API_KEY) as client:
+    owns_client = client is None
+    if client is None:
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    try:
         await asyncio.gather(*(
             _synthesize_chunk(
                 client,
@@ -136,4 +141,7 @@ async def generate_and_publish_tts(*, text: str, stay_id: str, request_id: str) 
             )
             for seq, chunk in enumerate(chunks)
         ))
+    finally:
+        if owns_client:
+            await client.close()
     await publish(stay_id, "tts_end", request_id, nonce=nonce, total=len(chunks))

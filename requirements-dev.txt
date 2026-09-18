@@ -1,0 +1,6 @@
+-r requirements.txt
+psycopg[binary]==3.2.9
+gunicorn==23.0.0
+pytest==8.4.1
+pytest-django==4.11.1
+factory-boy==3.3.3

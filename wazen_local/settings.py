@@ -87,15 +87,22 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 120
 CELERY_TASK_SOFT_TIME_LIMIT = 105
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TASK_IGNORE_RESULT = True
+KIOSK_STALE_REQUEST_SECONDS = int(os.getenv("KIOSK_STALE_REQUEST_SECONDS", "180"))
+KIOSK_SQLITE_BUSY_TIMEOUT_MS = int(os.getenv("KIOSK_SQLITE_BUSY_TIMEOUT_MS", "30000"))
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 KIOSK_API_KEY = os.getenv("KIOSK_API_KEY", "")
+KIOSK_SESSION_MAX_AGE = int(os.getenv("KIOSK_SESSION_MAX_AGE", "86400"))
 VOICE_SOURCE = os.getenv("VOICE_SOURCE", "realtime")
 VOICE_MODEL = os.getenv("VOICE_MODEL", "gpt-4o-mini-tts")
 VOICE_NAME = os.getenv("VOICE_NAME", "coral")
 VOICE_SPEED = float(os.getenv("VOICE_SPEED", "1.15"))
 VOICE_WAKE_WORD = os.getenv("VOICE_WAKE_WORD", "يا غروب")
+VOICE_ACTIVATION_MODE = os.getenv("VOICE_ACTIVATION_MODE", "wake").lower()
+if VOICE_ACTIVATION_MODE not in {"wake", "always_on", "button"}:
+    VOICE_ACTIVATION_MODE = "wake"
 VOICE_INSTRUCTIONS = os.getenv(
     "VOICE_INSTRUCTIONS",
     "Speak warmly and naturally in Arabic only. Never use English words or sentences.",
@@ -109,6 +116,9 @@ REALTIME_API_URL = os.getenv(
     "REALTIME_API_URL", "https://api.openai.com/v1/realtime/calls"
 )
 REALTIME_SESSION_TIMEOUT = float(os.getenv("REALTIME_SESSION_TIMEOUT", "25"))
+REALTIME_LOCAL_SESSION_TTL_SECONDS = int(
+    os.getenv("REALTIME_LOCAL_SESSION_TTL_SECONDS", "900")
+)
 REALTIME_VAD_MODE = os.getenv("REALTIME_VAD_MODE", "semantic_vad")
 REALTIME_VAD_EAGERNESS = os.getenv("REALTIME_VAD_EAGERNESS", "high")
 REALTIME_VAD_THRESHOLD = float(os.getenv("REALTIME_VAD_THRESHOLD", "0.42"))

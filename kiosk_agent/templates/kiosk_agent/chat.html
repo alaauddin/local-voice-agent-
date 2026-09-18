@@ -7,11 +7,15 @@
   <meta name="theme-color" content="#72c7c0">
   <meta name="voice-wake-word" content="{{ voice_wake_word }}">
   <meta name="voice-source" content="{{ voice_source }}">
+  <meta name="voice-activation-mode" content="{{ voice_activation_mode }}">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; media-src 'self' blob: data:; connect-src 'self' wss: https://api.openai.com; img-src 'self' data: blob:">
+  <link rel="manifest" href="{% static 'kiosk_agent/manifest.json' %}">
+  <link rel="icon" href="{% static 'kiosk_agent/videos/poster.svg' %}" type="image/svg+xml">
   <title>غروب | المساعد الذكي للشاليهات</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=sunset-voice-3">
+  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=sunset-voice-4">
 </head>
 <body>
   <main class="kiosk-shell">
@@ -58,9 +62,9 @@
       <div class="voice-canvas">
         <div class="welcome" id="welcomeCard">
           <div class="avatar-stage" id="avatarStage" data-state="idle">
-            <video class="avatar-video active" data-avatar-state="idle" src="{% static 'kiosk_agent/videos/idle.mp4' %}" autoplay muted loop playsinline preload="auto"></video>
-            <video class="avatar-video" data-avatar-state="thinking" src="{% static 'kiosk_agent/videos/thinking.mp4' %}" muted loop playsinline preload="auto"></video>
-            <video class="avatar-video" data-avatar-state="speaking" src="{% static 'kiosk_agent/videos/speaking.mp4' %}" muted loop playsinline preload="auto"></video>
+            <video class="avatar-video active" data-avatar-state="idle" data-src="{% static 'kiosk_agent/videos/idle.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
+            <video class="avatar-video" data-avatar-state="thinking" data-src="{% static 'kiosk_agent/videos/thinking.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
+            <video class="avatar-video" data-avatar-state="speaking" data-src="{% static 'kiosk_agent/videos/speaking.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
             <div class="avatar-glow"></div>
           </div>
           <button class="mic-button" id="micButton" type="button" aria-label="ابدأ التحدث">
@@ -89,19 +93,19 @@
         <div class="messages" id="messages" aria-live="polite" aria-relevant="additions"></div>
       </aside>
 
-      <div class="activity" id="activity" hidden>
+      <div class="activity" id="activity" hidden aria-live="polite" aria-atomic="true">
         <span></span><span></span><span></span>
         <p id="activityText">يجهّز لك الرد…</p>
       </div>
 
       <form class="composer" id="chatForm">
         <label class="sr-only" for="messageInput">اكتب رسالتك</label>
-        <textarea id="messageInput" rows="1" maxlength="4000" placeholder="كيف يمكنني خدمتك؟" autocomplete="off"></textarea>
+        <textarea id="messageInput" rows="1" maxlength="4000" placeholder="كيف يمكنني خدمتك؟" autocomplete="off" aria-describedby="charCount"></textarea>
         <button id="sendButton" type="submit" aria-label="إرسال الرسالة" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-6-8-2Z"/><path d="m12 14 8-10"/></svg>
         </button>
       </form>
-      <p class="composer-hint">اضغط Enter للإرسال، وShift + Enter لسطر جديد</p>
+      <p class="composer-hint"><span id="charCount" aria-live="polite">0 / 4000</span> — اضغط Enter للإرسال، وShift + Enter لسطر جديد</p>
     </section>
   </main>
 
@@ -118,17 +122,21 @@
   <dialog id="voiceSettingsDialog" class="settings-dialog">
     <h2>إعدادات الصوت</h2>
     <p>تعمل غروب بصوت مباشر منخفض التأخير، ويُستخدم صوت الجهاز تلقائياً عند تعذر الاتصال.</p>
+    <label class="setting-field">
+      <span>الميكروفون</span>
+      <select id="preferredMic"></select>
+    </label>
     <label class="setting-toggle">
       <span>تفعيل الصوت الاحتياطي</span>
       <input id="fallbackEnabled" type="checkbox" checked>
     </label>
     <label class="setting-field">
-      <span>صوت الجهاز</span>
+      <span>الصوت الاحتياطي</span>
       <select id="browserVoice"></select>
     </label>
     <label class="setting-field">
-      <span>سرعة النطق <output id="speechRateValue">1.1</output></span>
-      <input id="speechRate" type="range" min="0.7" max="1.8" step="0.1" value="1.1">
+      <span>سرعة الصوت <output id="speechRateValue">1.1</output></span>
+      <input id="speechRate" type="range" min="0.7" max="1.4" step="0.1" value="1.1">
     </label>
     <div class="dialog-actions">
       <button type="button" id="testVoice">تجربة الصوت</button>
@@ -136,6 +144,6 @@
     </div>
   </dialog>
 
-  <script src="{% static 'kiosk_agent/chat.js' %}?v=sunset-realtime-4" defer></script>
+  <script src="{% static 'kiosk_agent/chat.js' %}?v=sunset-realtime-5" defer></script>
 </body>
 </html>

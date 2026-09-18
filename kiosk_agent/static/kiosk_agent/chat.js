@@ -12,14 +12,16 @@
     resetDialog: $("#resetDialog"), cancelReset: $("#cancelReset"), confirmReset: $("#confirmReset"),
     settingsButton: $("#voiceSettingsButton"), settingsDialog: $("#voiceSettingsDialog"),
     closeSettings: $("#closeVoiceSettings"), fallbackEnabled: $("#fallbackEnabled"),
-    browserVoice: $("#browserVoice"), speechRate: $("#speechRate"),
+    preferredMic: $("#preferredMic"), browserVoice: $("#browserVoice"), speechRate: $("#speechRate"),
     speechRateValue: $("#speechRateValue"), testVoice: $("#testVoice"),
     messagesDrawer: $("#messagesDrawer"), messagesToggle: $("#messagesToggle"),
     closeMessages: $("#closeMessages"), messageCount: $("#messageCount"),
   };
 
   const wakeWord = ($('meta[name="voice-wake-word"]')?.content || "يا غروب").trim();
-  const realtimeEnabled = $('meta[name="voice-source"]')?.content === "realtime";
+  const voiceSource = $('meta[name="voice-source"]')?.content || "realtime";
+  const realtimeEnabled = voiceSource === "realtime";
+  const activationMode = $('meta[name="voice-activation-mode"]')?.content || "wake";
   const state = {
     socket: null, connected: false, busy: false, persona: "غروب", streams: new Map(),
     reconnectAttempts: 0, shouldReconnect: true, recognition: null, recognitionMode: null,
@@ -33,6 +35,9 @@
     currentRequestId: null, assistantTranscript: "", assistantTarget: null,
     assistantEventId: "", toolIterations: 0, outputAudioActive: false,
     responseComplete: false, turnStoppedAt: 0, responseStartedAt: 0,
+    micAutoStartEnabled: activationMode === "always_on", autoStartTimer: null,
+    localSessionId: null, currentStayId: null, connectionPromise: null,
+    realtimeRetryAttempts: 0,
   };
   const fallback = {
     enabled: localStorage.getItem("voiceFallbackEnabled") !== "false",
@@ -40,20 +45,118 @@
     rate: Number.parseFloat(localStorage.getItem("voiceFallbackRate") || "1.1"),
     voices: [],
   };
-  const apiKey = localStorage.getItem("kioskApiKey") || "";
+  const apiKey = "";
   const playback = new Audio();
   playback.preload = "auto";
   playback.volume = 1;
+  const ASSISTANT_OUTPUT_GAIN = 1.7;
+  let outputCtx = null;
+  let outputGain = null;
+  let outputSource = null;
+
+  function ensureAssistantGain() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    if (!outputCtx) {
+      outputCtx = new AC();
+      outputGain = outputCtx.createGain();
+      outputGain.gain.value = ASSISTANT_OUTPUT_GAIN;
+      outputGain.connect(outputCtx.destination);
+    }
+    if (!outputSource) {
+      try {
+        outputSource = outputCtx.createMediaElementSource(playback);
+        outputSource.connect(outputGain);
+      } catch (error) {
+        console.debug("Assistant gain source already connected", error);
+      }
+    }
+    return true;
+  }
+
+  async function resumeOutputContext() {
+    if (outputCtx && outputCtx.state === "suspended") {
+      try { await outputCtx.resume(); } catch (error) { console.debug("AudioContext resume failed", error); }
+    }
+  }
+
+  const preferredMicKey = "kioskPreferredMicId";
+
+  function getPreferredMicId() {
+    return localStorage.getItem(preferredMicKey) || "";
+  }
+
+  async function enumerateMicrophones() {
+    if (!navigator.mediaDevices?.enumerateDevices) return [];
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices.filter((d) => d.kind === "audioinput");
+    } catch (error) {
+      console.debug("enumerateDevices failed", error);
+      return [];
+    }
+  }
+
+  async function populatePreferredMic() {
+    if (!el.preferredMic) return;
+    const mics = await enumerateMicrophones();
+    const saved = getPreferredMicId();
+    el.preferredMic.replaceChildren();
+    const autoOpt = document.createElement("option");
+    autoOpt.value = "";
+    autoOpt.textContent = "تلقائي (الأفضل متاح)";
+    autoOpt.selected = !saved;
+    el.preferredMic.append(autoOpt);
+    mics.forEach((mic) => {
+      const opt = document.createElement("option");
+      opt.value = mic.deviceId;
+      opt.textContent = mic.label || `ميكروفون ${mic.deviceId.slice(0, 6)}`;
+      opt.selected = mic.deviceId === saved;
+      el.preferredMic.append(opt);
+    });
+    if (mics.length && !saved) {
+      console.debug("[Mic] available devices", mics.map((m) => ({ id: m.deviceId.slice(0,8), label: m.label })));
+    }
+  }
 
   async function unlockAudio() {
     if (state.audioUnlocked) return;
     try {
-      // A short silent WAV started from a user gesture unlocks later streamed
-      // playback in browsers that enforce media autoplay restrictions.
-      playback.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAACA";
-      await playback.play();
+      if (!realtimeEnabled) {
+        playback.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAACA";
+        playback.muted = false;
+        playback.volume = 1;
+        await playback.play();
+        playback.pause();
+        playback.removeAttribute("src");
+        playback.load();
+        state.audioUnlocked = true;
+        return;
+      }
+      if (realtimeEnabled) {
+        ensureAssistantGain();
+        await resumeOutputContext();
+      }
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !outputCtx) {
+        const ctx = new AC();
+        if (ctx.state === "suspended") await ctx.resume();
+        const buf = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(0);
+        setTimeout(() => { try { ctx.close(); } catch (_) {} }, 500);
+      }
+      playback.muted = true;
+      const prevVol = playback.volume;
+      playback.volume = 0;
+      try { await playback.play(); } catch (_) {}
       playback.pause();
       playback.currentTime = 0;
+      playback.muted = false;
+      playback.volume = 1;
+      void prevVol;
       state.audioUnlocked = true;
     } catch (error) {
       console.debug("Audio unlock is waiting for a user gesture", error);
@@ -97,6 +200,8 @@
     const clean = (content || "").trim();
     if (!clean || !state.currentRequestId) return Promise.resolve();
     return postJson("/api/v1/kiosk/realtime/messages/", {
+      stay_id: state.currentStayId,
+      session_id: state.localSessionId,
       request_id: state.currentRequestId,
       role,
       content: clean,
@@ -118,6 +223,7 @@
   }
 
   const normalizedWakeWord = normalizeArabic(wakeWord);
+  const avatarObjectUrls = [];
   const endConversationPhrases = [
     "انهاء المحادثه", "انهي المحادثه", "مع السلامه", "خلاص شكرا", "شكرا غروب",
   ];
@@ -130,11 +236,27 @@
       const active = video.dataset.avatarState === videoMode;
       video.classList.toggle("active", active);
       if (active) {
-        try { video.currentTime = 0; } catch (error) { console.debug(error); }
-        video.play().catch(() => {});
+        if (video.src && !document.hidden) video.play().catch(() => {});
       } else {
         video.pause();
-        try { video.currentTime = 0; } catch (error) { console.debug(error); }
+      }
+    });
+  }
+
+  function preloadAvatarVideos() {
+    el.avatar.querySelectorAll(".avatar-video[data-src]").forEach(async (video) => {
+      try {
+        const response = await fetch(video.dataset.src, { cache: "force-cache" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const objectUrl = URL.createObjectURL(await response.blob());
+        avatarObjectUrls.push(objectUrl);
+        video.src = objectUrl;
+        video.load();
+        if (video.dataset.avatarState === el.avatar.dataset.state && !document.hidden) {
+          video.play().catch(() => {});
+        }
+      } catch (error) {
+        console.warn("Avatar video could not be preloaded", error);
       }
     });
   }
@@ -149,6 +271,35 @@
     el.mic.classList.toggle("conversation-active", state.conversationActive);
   }
 
+  function cancelAutoStart() {
+    if (state.autoStartTimer) {
+      clearTimeout(state.autoStartTimer);
+      state.autoStartTimer = null;
+    }
+  }
+
+  function scheduleAutoRealtime(delay = 1200) {
+    if (!realtimeEnabled || !state.micAutoStartEnabled) return;
+    if (state.realtimeReady || state.rtcPeer) return;
+    if (!state.connected) return;
+    if (state.autoStartTimer) return;
+    state.autoStartTimer = window.setTimeout(() => {
+      state.autoStartTimer = null;
+      if (!state.micAutoStartEnabled || !state.connected || state.realtimeReady || state.rtcPeer) return;
+      autoRealtimeStartup();
+    }, delay);
+  }
+
+  async function autoRealtimeStartup() {
+    if (!realtimeEnabled || !state.micAutoStartEnabled) return;
+    if (state.realtimeReady || state.rtcPeer) return;
+    if (!state.connected) return;
+    await startRealtime();
+    if (!state.realtimeReady && state.micAutoStartEnabled && !state.rtcPeer && state.connected) {
+      scheduleAutoRealtime(1500);
+    }
+  }
+
   function setConnection(mode, text) {
     state.connected = mode === "online";
     el.connectionPill.classList.toggle("online", mode === "online");
@@ -157,6 +308,9 @@
     el.connectionText.textContent = text;
     updateControls();
     if (state.connected && state.wakeArmed && !state.recognizing) scheduleWakeListener();
+    if (state.connected && realtimeEnabled && state.micAutoStartEnabled && !state.realtimeReady && !state.rtcPeer) {
+      scheduleAutoRealtime(700);
+    }
   }
 
   function setBusy(busy, text = "يجهّز لك الرد…") {
@@ -186,8 +340,18 @@
       el.messageCount.hidden = true;
       scrollBottom();
       el.closeMessages.focus();
+    } else {
+      el.messagesToggle.focus();
     }
   }
+  el.messagesDrawer?.addEventListener("keydown", (e) => {
+    if (!state.messagesOpen || e.key !== "Tab") return;
+    const focusable = [...el.messagesDrawer.querySelectorAll('button, [href], textarea, select, [tabindex]:not([tabindex="-1"])')].filter(x=>x.offsetParent!==null);
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length-1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
 
   function noteNewMessage() {
     if (state.messagesOpen || state.loadingMemory) return;
@@ -216,6 +380,8 @@
     }
     row.append(bubble);
     el.messages.append(row);
+    const rows = el.messages.querySelectorAll(".message-row");
+    if (rows.length > 200) rows[0].remove();
     noteNewMessage();
     scrollBottom();
     return role === "assistant" ? bubble.querySelector(".message-content") : bubble;
@@ -232,12 +398,17 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       state.persona = data.chalet.persona_name || "غروب";
+      state.currentStayId = data.stay_id;
       el.chaletName.textContent = data.chalet.chalet_name || "الشاليه";
       el.personaIntro.textContent = `مرحباً بك، أنا ${state.persona}، كونسيرجك الرقمي الخاص.`;
       el.mobilePersona.textContent = state.persona;
       if (data.chalet.welcome_message) el.welcomeMessage.textContent = data.chalet.welcome_message;
       state.loadingMemory = true;
-      data.messages.forEach((message) => createMessage(message.role, message.content, message.request_id));
+      data.messages.forEach((message) => {
+        const bubble = createMessage(message.role, message.content, message.request_id);
+        bubble.closest(".message-row").dataset.messageId = String(message.id);
+        bubble.closest(".message-row").dataset.persisted = "true";
+      });
       state.loadingMemory = false;
       if (data.messages.some((message) => message.role === "user" && ["queued", "streaming"].includes(message.status))) {
         setBusy(true, "جارٍ استكمال طلبك…");
@@ -255,6 +426,7 @@
     state.socket.addEventListener("open", () => {
       state.reconnectAttempts = 0;
       setConnection("online", "متصل وجاهز لخدمتك");
+      if (realtimeEnabled && state.micAutoStartEnabled) scheduleAutoRealtime(600);
     });
     state.socket.addEventListener("message", ({ data }) => {
       try { handleEvent(JSON.parse(data)); } catch (error) { console.error("Invalid socket event", error); }
@@ -306,6 +478,28 @@
         playNext();
         break;
       case "busy": setBusy(true, event.message || "يوجد طلب قيد التنفيذ…"); break;
+      case "message_persisted": {
+        if (event.stay_id && state.currentStayId && event.stay_id !== state.currentStayId) break;
+        let row = [...el.messages.querySelectorAll(".message-row")]
+          .find((item) => item.dataset.messageId === String(event.message_id));
+        if (!row) {
+          row = [...el.messages.querySelectorAll(".message-row")]
+            .find((item) => item.dataset.requestId === requestId
+              && item.classList.contains(event.role) && item.dataset.persisted !== "true");
+        }
+        if (!row) {
+          const bubble = createMessage(event.role, event.content || "", requestId);
+          row = bubble.closest(".message-row");
+        }
+        if (row) {
+          const content = row.querySelector(".message-content") || row.querySelector(".message-bubble");
+          if (content) content.textContent = event.content || "";
+          row.dataset.messageId = String(event.message_id || "");
+          row.dataset.sequence = String(event.sequence || "");
+          row.dataset.persisted = "true";
+        }
+        break;
+      }
       case "error":
         createMessage("assistant", event.message || "تعذر إكمال الطلب حالياً. يرجى المحاولة مرة أخرى.");
         finishTurn();
@@ -313,6 +507,8 @@
       case "cancelled": finishTurn(); break;
       case "reset":
         closeRealtime();
+        state.localSessionId = null;
+        state.currentStayId = event.new_stay_id || null;
         state.conversationActive = false;
         restartSocket();
         break;
@@ -352,13 +548,15 @@
     }
     state.audioBuffer.delete(state.nextSeq);
     state.audioPlaying = true;
-    setAvatar("speaking");
-    el.voiceStatus.textContent = `${state.persona} يتحدث الآن…`;
+    setAvatar("thinking");
+    el.voiceStatus.textContent = "يبدأ تشغيل الرد الصوتي…";
     if (chunk.type === "speech") {
       speakBrowser(chunk.value, chunkFinished, true);
       return;
     }
     const audio = playback;
+    // Backend MP3 must play directly. A suspended AudioContext can make a
+    // successfully playing media element completely silent.
     audio.src = chunk.value;
     audio.muted = false;
     audio.volume = 1;
@@ -381,7 +579,11 @@
       else chunkFinished();
     };
     audio.onerror = useFallback;
-    audio.play().then(() => { state.audioUnlocked = true; }).catch(useFallback);
+    audio.play().then(() => {
+      state.audioUnlocked = true;
+      setAvatar("speaking");
+      el.voiceStatus.textContent = `${state.persona} يتحدث الآن…`;
+    }).catch(useFallback);
   }
 
   function chunkFinished() {
@@ -420,6 +622,8 @@
       } else {
         try {
           output = await postJson("/api/v1/kiosk/realtime/tools/", {
+            stay_id: state.currentStayId,
+            session_id: state.localSessionId,
             request_id: state.currentRequestId,
             call_id: call.call_id,
             name: call.name,
@@ -446,8 +650,10 @@
     switch (event.type) {
       case "session.created":
       case "session.updated":
+        console.debug(`[Realtime] ${event.type}`);
         return;
       case "input_audio_buffer.speech_started":
+        console.debug("[Realtime] speech_started", { at: Math.round(performance.now()) });
         // Cut the assistant audio locally before its tail can leak back into the
         // microphone. Server VAD still handles cancelling the active response.
         playback.muted = true;
@@ -463,6 +669,7 @@
         el.voiceStatus.textContent = "أنا أسمعك…";
         return;
       case "input_audio_buffer.speech_stopped":
+        console.debug("[Realtime] speech_stopped", { at: Math.round(performance.now()), turnStoppedAt: Math.round(performance.now()) });
         state.turnStoppedAt = performance.now();
         setBusy(true, "فهمت عليك…");
         return;
@@ -471,6 +678,7 @@
         return;
       case "conversation.item.input_audio_transcription.completed": {
         const transcript = (event.transcript || "").trim();
+        console.debug("[Realtime] transcription completed", { transcript, len: transcript.length, item_id: event.item_id });
         el.interim.textContent = "";
         if (transcript) {
           createMessage("user", transcript, state.currentRequestId);
@@ -479,11 +687,13 @@
         return;
       }
       case "response.created":
+        console.debug("[Realtime] response created", { id: event.response?.id || event.response_id || "", at: Math.round(performance.now()) });
         state.responseStartedAt = performance.now();
         state.responseComplete = false;
         setBusy(true, "غروب معك…");
         return;
       case "output_audio_buffer.started":
+        console.debug("[Realtime] output_audio_buffer.started");
         noteFirstAudioLatency();
         playback.muted = false;
         state.outputAudioActive = true;
@@ -562,6 +772,8 @@
   }
 
   function closeRealtime() {
+    const closingSessionId = state.localSessionId;
+    const closingStayId = state.currentStayId;
     state.realtimeReady = false;
     if (state.rtcChannel) state.rtcChannel.close();
     if (state.rtcPeer) state.rtcPeer.close();
@@ -573,14 +785,35 @@
     state.rtcChannel = null;
     state.rtcPeer = null;
     state.rtcStream = null;
+    state.localSessionId = null;
     state.currentRequestId = null;
     state.assistantTranscript = "";
     state.assistantTarget = null;
     state.outputAudioActive = false;
     state.responseComplete = false;
+    if (closingSessionId && closingStayId) {
+      fetch("/api/v1/kiosk/realtime/session/close/", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          session_id: closingSessionId,
+          stay_id: closingStayId,
+        }),
+        keepalive: true,
+      }).catch(() => {});
+    }
   }
 
-  async function startRealtime(initialText = "") {
+  function startRealtime(initialText = "") {
+    if (state.connectionPromise) return state.connectionPromise;
+    if (!realtimeEnabled || state.realtimeReady || state.rtcPeer) return Promise.resolve();
+    state.connectionPromise = openRealtime(initialText).finally(() => {
+      state.connectionPromise = null;
+    });
+    return state.connectionPromise;
+  }
+
+  async function openRealtime(initialText = "") {
     if (!realtimeEnabled || state.realtimeReady || state.rtcPeer) return;
     stopRecognition();
     state.conversationActive = true;
@@ -589,20 +822,60 @@
     const connectionStartedAt = performance.now();
     try {
       const supportedConstraints = navigator.mediaDevices.getSupportedConstraints?.() || {};
-      const audioConstraints = {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1,
+      const preferredId = getPreferredMicId();
+      const buildConstraints = (withDevice) => {
+        const c = {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        };
+        if (supportedConstraints.sampleRate) c.sampleRate = { ideal: 48000 };
+        if (supportedConstraints.sampleSize) c.sampleSize = { ideal: 16 };
+        if (supportedConstraints.voiceIsolation) c.voiceIsolation = true;
+        if (withDevice && preferredId) c.deviceId = { exact: preferredId };
+        return c;
       };
-      if (supportedConstraints.voiceIsolation) audioConstraints.voiceIsolation = true;
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: audioConstraints,
-      });
+      let stream;
+      let audioConstraints = buildConstraints(true);
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      } catch (error) {
+        if (preferredId && ["NotFoundError", "OverconstrainedError", "NotReadableError"].includes(error.name)) {
+          console.warn(`[Mic] preferred device ${preferredId.slice(0,8)} failed (${error.name}), retrying without deviceId`);
+          audioConstraints = buildConstraints(false);
+          stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        } else {
+          throw error;
+        }
+      }
       const microphoneTrack = stream.getAudioTracks()[0];
       if (microphoneTrack) {
-        console.debug("Microphone processing", microphoneTrack.getSettings());
+        const s = microphoneTrack.getSettings();
+        console.debug("[Mic] getSettings", {
+          deviceId: s.deviceId ? s.deviceId.slice(0, 8) : "",
+          echoCancellation: s.echoCancellation,
+          noiseSuppression: s.noiseSuppression,
+          autoGainControl: s.autoGainControl,
+          voiceIsolation: s.voiceIsolation,
+          sampleRate: s.sampleRate,
+          channelCount: s.channelCount,
+          sampleSize: s.sampleSize,
+        });
+        console.debug("[Mic] constraints applied", audioConstraints);
       }
+      stream.getAudioTracks().forEach((track) => {
+        track.addEventListener("ended", () => {
+          if (!state.micAutoStartEnabled) return;
+          if (state.rtcStream !== stream) return;
+          console.warn("Microphone track ended unexpectedly, recovering");
+          closeRealtime();
+          state.conversationActive = false;
+          updateControls();
+          el.voiceStatus.textContent = "انقطع الميكروفون — نعيد المحاولة…";
+          scheduleAutoRealtime(800);
+        });
+      });
       const pc = new RTCPeerConnection();
       const dc = pc.createDataChannel("oai-events");
       state.rtcPeer = pc;
@@ -610,10 +883,15 @@
       state.rtcStream = stream;
       stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream));
       pc.ontrack = ({ streams }) => {
+        ensureAssistantGain();
+        resumeOutputContext();
         playback.srcObject = streams[0];
         playback.muted = false;
         playback.volume = 1;
-        playback.play().catch((error) => console.error("Realtime audio playback failed", error));
+        if (outputGain) outputGain.gain.value = ASSISTANT_OUTPUT_GAIN;
+        playback.play().catch((error) =>
+          console.error("Realtime audio playback failed", error)
+        );
       };
       dc.addEventListener("message", ({ data }) => {
         try { handleRealtimeEvent(JSON.parse(data)).catch((error) => console.error(error)); }
@@ -624,7 +902,19 @@
         dc.addEventListener("error", reject, { once: true });
       });
       pc.addEventListener("connectionstatechange", () => {
-        if (["failed", "closed"].includes(pc.connectionState) && state.conversationActive) {
+        if (!["failed", "closed"].includes(pc.connectionState)) return;
+        if (state.rtcPeer !== pc) return;
+        if (state.micAutoStartEnabled && realtimeEnabled) {
+          console.warn(`Realtime connection ${pc.connectionState}, recovering with auto-mic`);
+          const wasActive = state.conversationActive;
+          closeRealtime();
+          state.conversationActive = false;
+          setBusy(false);
+          updateControls();
+          el.voiceStatus.textContent = "انقطع الاتصال الصوتي — نعيد المحاولة…";
+          if (wasActive) scheduleAutoRealtime(1200);
+          else scheduleAutoRealtime(1200);
+        } else if (state.conversationActive) {
           endConversation(false);
         }
       });
@@ -636,12 +926,19 @@
         method: "POST", headers: realtimeHeaders, body: offer.sdp,
       });
       if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
-      await pc.setRemoteDescription({ type: "answer", sdp: await response.text() });
+      state.localSessionId = response.headers.get("X-Local-Session-ID");
+      state.currentStayId = response.headers.get("X-Stay-ID") || state.currentStayId;
+      if (!state.localSessionId || !state.currentStayId) {
+        throw new Error("Local Realtime session identity is missing");
+      }
+      const answerSdp = await response.text();
+      await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
       await channelReady;
       console.debug(
         `Realtime connection latency: ${Math.round(performance.now() - connectionStartedAt)}ms`,
       );
       state.realtimeReady = true;
+      state.realtimeRetryAttempts = 0;
       state.currentRequestId = uuid();
       state.toolIterations = 0;
       if (initialText.trim()) {
@@ -661,16 +958,42 @@
           },
         });
       }
+      cancelAutoStart();
       setBusy(false);
+      updateControls();
       el.voiceStatus.textContent = "تفضل… أنا أستمع";
     } catch (error) {
-      console.error("Unable to start Realtime", error);
+      const errName = error && error.name ? error.name : "UnknownError";
+      console.error(`Unable to start Realtime [${errName}]`, error);
       closeRealtime();
       state.conversationActive = false;
       setBusy(false);
-      speakBrowser("تعذر تشغيل المحادثة المباشرة الآن. حاول مرة أخرى.", () => {
-        scheduleWakeListener(500);
-      }, true);
+      updateControls();
+      if (state.micAutoStartEnabled && realtimeEnabled) {
+        if (errName === "NotAllowedError") {
+          state.micAutoStartEnabled = false;
+          el.voiceStatus.textContent = "الميكروفون محظور — تحقق من إعدادات المتصفح (NotAllowedError)";
+        } else if (errName === "NotFoundError") {
+          el.voiceStatus.textContent = "لا يوجد ميكروفون (NotFoundError)";
+        } else if (errName === "NotReadableError") {
+          el.voiceStatus.textContent = "الميكروفون قيد الاستخدام (NotReadableError)";
+        } else if (errName === "OverconstrainedError") {
+          el.voiceStatus.textContent = `الميكروفون غير مدعوم (${errName}) — نعيد المحاولة…`;
+        } else {
+          el.voiceStatus.textContent = `تعذر تشغيل الميكروفون (${errName}) — نعيد المحاولة…`;
+        }
+        if (state.micAutoStartEnabled) {
+          state.realtimeRetryAttempts += 1;
+          if (state.realtimeRetryAttempts <= 5) {
+            const backoff = Math.min(1800 * (2 ** (state.realtimeRetryAttempts - 1)), 15000);
+            scheduleAutoRealtime(backoff + Math.floor(Math.random() * 500));
+          }
+        }
+      } else {
+        speakBrowser("تعذر تشغيل المحادثة المباشرة الآن. حاول مرة أخرى.", () => {
+          scheduleWakeListener(500);
+        }, true);
+      }
     }
   }
 
@@ -696,6 +1019,7 @@
   function touchConversationTimeout() {
     clearTimeout(state.inactivityTimer);
     if (!state.conversationActive) return;
+    if (realtimeEnabled && state.micAutoStartEnabled) return;
     state.inactivityTimer = window.setTimeout(() => endConversation(false), 120000);
   }
 
@@ -709,6 +1033,11 @@
     setAvatar("idle");
     el.voiceStatus.textContent = `قل «${wakeWord}» لبدء محادثة جديدة`;
     updateControls();
+    if (realtimeEnabled && state.micAutoStartEnabled && state.connected) {
+      el.voiceStatus.textContent = "تفضل… أنا أستمع";
+      scheduleAutoRealtime(900);
+      return;
+    }
     const resumeWake = () => scheduleWakeListener(350);
     if (sayGoodbye) speakBrowser("في أمان الله، أنا هنا متى احتجتني", resumeWake);
     else resumeWake();
@@ -721,6 +1050,10 @@
     utterance.lang = /[\u0600-\u06ff]/.test(text) ? "ar-SA" : "en-US";
     const voice = fallback.voices.find((item) => item.voiceURI === fallback.voiceURI);
     if (voice) utterance.voice = voice;
+    utterance.onstart = () => {
+      setAvatar("speaking");
+      el.voiceStatus.textContent = `${state.persona} يتحدث الآن…`;
+    };
     utterance.onend = done;
     utterance.onerror = done;
     window._activeKioskUtterance = utterance;
@@ -730,7 +1063,8 @@
   function configureRecognition() {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Recognition) {
-      el.voiceStatus.textContent = "التعرف الصوتي غير مدعوم، يمكنك الكتابة أدناه";
+      el.voiceStatus.textContent = "التعرف الصوتي غير مدعوم في هذا المتصفح — الكتابة متاحة دائماً";
+      el.mic.title = "التعرف الصوتي غير مدعوم، استخدم الكتابة";
       return;
     }
     state.recognition = new Recognition();
@@ -750,7 +1084,7 @@
     state.recognition.onresult = recognitionResult;
     state.recognition.onerror = recognitionError;
     state.recognition.onend = recognitionEnded;
-    state.wakeArmed = true;
+    state.wakeArmed = activationMode === "wake";
     updateControls();
   }
 
@@ -782,14 +1116,19 @@
       } else if (remainder) submitMessage(remainder, true);
       else {
         el.interim.textContent = "";
-        setAvatar("speaking");
         el.voiceStatus.textContent = `${state.persona} يرحّب بك…`;
-        speakBrowser("أهلاً وسهلاً، أنا معك. تفضل.", () => {
-          if (!state.conversationActive || state.busy) return;
-          setAvatar("idle");
-          el.voiceStatus.textContent = "تفضل… أنا أستمع";
-          startRecognition("command");
-        }, true);
+        if (voiceSource === "backend" && state.socket?.readyState === WebSocket.OPEN) {
+          setBusy(true, "يحضّر الترحيب الصوتي…");
+          state.socket.send(JSON.stringify({ type: "voice.welcome", request_id: uuid() }));
+        } else {
+          setAvatar("speaking");
+          speakBrowser("أهلاً وسهلاً، أنا معك. تفضل.", () => {
+            if (!state.conversationActive || state.busy) return;
+            setAvatar("idle");
+            el.voiceStatus.textContent = "تفضل… أنا أستمع";
+            startRecognition("command");
+          }, true);
+        }
       }
       return;
     }
@@ -836,6 +1175,7 @@
   }
 
   function startRecognition(mode) {
+    if (realtimeEnabled && (state.realtimeReady || state.rtcPeer)) return;
     if (!state.recognition || state.recognizing || state.busy || !state.connected) return;
     state.recognitionMode = mode;
     state.finalHandled = false;
@@ -849,6 +1189,7 @@
   }
 
   function scheduleWakeListener(delay = 250) {
+    if (realtimeEnabled && (state.realtimeReady || state.rtcPeer)) return;
     if (!state.wakeArmed || state.conversationActive || state.busy || state.recognizing || !state.connected) return;
     window.setTimeout(() => {
       if (state.wakeArmed && !state.conversationActive && !state.busy && !state.recognizing) startRecognition("wake");
@@ -857,9 +1198,14 @@
 
   function toggleWakeWord() {
     if (state.conversationActive) {
+      state.micAutoStartEnabled = false;
+      cancelAutoStart();
       endConversation(false);
+      el.voiceStatus.textContent = "الميكروفون متوقف — اضغط للتفعيل";
     } else if (realtimeEnabled) {
-      state.wakeArmed = true;
+      state.micAutoStartEnabled = activationMode === "always_on";
+      state.wakeArmed = activationMode === "wake";
+      cancelAutoStart();
       stopRecognition();
       startRealtime();
     } else if (state.wakeArmed && state.recognizing) {
@@ -909,6 +1255,8 @@
   function resizeInput() {
     el.input.style.height = "auto";
     el.input.style.height = `${Math.min(el.input.scrollHeight, 140)}px`;
+    const counter = document.getElementById("charCount");
+    if (counter) counter.textContent = `${el.input.value.length} / 4000`;
     updateControls();
   }
 
@@ -938,6 +1286,8 @@
     stopRecognition();
     stopAudio();
     closeRealtime();
+    state.micAutoStartEnabled = activationMode === "always_on";
+    cancelAutoStart();
     try {
       const response = await fetch("/api/v1/kiosk/reset/", { method: "POST", headers: headers(), body: "{}" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -957,8 +1307,8 @@
 
   el.form.addEventListener("submit", (event) => { event.preventDefault(); submitMessage(el.input.value); });
   document.addEventListener("pointerdown", unlockAudio, { once: true, passive: true });
-  document.addEventListener("keydown", unlockAudio, { once: true });
-  el.input.addEventListener("input", resizeInput);
+  document.addEventListener("keydown", unlockAudio, { once: true, passive: true });
+  el.input.addEventListener("input", resizeInput, {passive:true});
   el.input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitMessage(el.input.value); }
   });
@@ -984,6 +1334,24 @@
     fallback.enabled = el.fallbackEnabled.checked;
     localStorage.setItem("voiceFallbackEnabled", String(fallback.enabled));
   });
+  if (el.preferredMic) {
+    populatePreferredMic();
+    el.preferredMic.addEventListener("change", () => {
+      const id = el.preferredMic.value;
+      if (id) localStorage.setItem(preferredMicKey, id);
+      else localStorage.removeItem(preferredMicKey);
+      console.debug("[Mic] preferred device selected", id ? id.slice(0, 8) : "auto");
+      if (state.realtimeReady || state.rtcPeer) {
+        console.debug("[Mic] will use new device on next Realtime session");
+      }
+    });
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener("devicechange", populatePreferredMic);
+    } else if (navigator.mediaDevices) {
+      navigator.mediaDevices.ondevicechange = populatePreferredMic;
+    }
+    el.settingsButton.addEventListener("click", populatePreferredMic);
+  }
   el.browserVoice.addEventListener("change", () => {
     fallback.voiceURI = el.browserVoice.value;
     localStorage.setItem("voiceFallbackURI", fallback.voiceURI);
@@ -996,21 +1364,43 @@
   el.testVoice.addEventListener("click", () => speakBrowser("أهلاً وسهلاً بك، أنا غروب وفي خدمتك"));
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
+      el.avatar.querySelectorAll(".avatar-video").forEach((video) => video.pause());
       stopRecognition();
-      if (realtimeEnabled && state.conversationActive) endConversation(false);
+      if (realtimeEnabled && state.conversationActive) {
+        if (state.micAutoStartEnabled) {
+          closeRealtime();
+          state.conversationActive = false;
+          updateControls();
+        } else {
+          endConversation(false);
+        }
+      }
       return;
     }
+    setAvatar(el.avatar.dataset.state, true);
     if (!state.connected || state.busy) return;
+    if (realtimeEnabled && state.micAutoStartEnabled && !state.realtimeReady && !state.rtcPeer) {
+      scheduleAutoRealtime(300);
+      return;
+    }
     if (state.conversationActive && !realtimeEnabled) window.setTimeout(() => startRecognition("command"), 250);
     else scheduleWakeListener(250);
   });
-  window.addEventListener("beforeunload", () => { stopRecognition(); closeRealtime(); });
+  window.addEventListener("online", () => setConnection("online", "عاد الاتصال — جاهز لخدمتك"));
+  window.addEventListener("offline", () => setConnection("offline", "انقطع الإنترنت — سيتم الإرسال تلقائياً عند العودة"));
+  window.addEventListener("beforeunload", () => {
+    cancelAutoStart();
+    stopRecognition();
+    closeRealtime();
+    avatarObjectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+  });
   if (window.speechSynthesis) {
     populateVoices();
     window.speechSynthesis.onvoiceschanged = populateVoices;
   }
 
   setAvatar("idle", true);
+  preloadAvatarVideos();
   configureRecognition();
   loadMemory();
   connect();

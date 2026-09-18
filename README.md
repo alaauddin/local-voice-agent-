@@ -55,7 +55,9 @@ prompt and is never requested from the guest.
 - `GET /api/v1/kiosk/messages/` returns the current stay's guest-visible memory.
 - `POST /api/v1/kiosk/reset/` deletes current memory and rotates the stay identifier.
 - `GET /api/v1/kiosk/health/` checks the database and Redis.
+- `GET /api/v1/kiosk/status/` returns protected, guest-safe local operational status.
 - `POST /api/v1/kiosk/realtime/session/` exchanges a browser SDP offer for a WebRTC answer.
+- `POST /api/v1/kiosk/realtime/session/close/` invalidates the local Realtime session.
 - `POST /api/v1/kiosk/realtime/messages/` persists a completed Realtime transcript item.
 - `POST /api/v1/kiosk/realtime/tools/` validates and executes one allowlisted function call.
 - `ws://127.0.0.1:8008/ws/kiosk/` accepts `{"type":"chat.message","message":"..."}`.
@@ -66,12 +68,12 @@ chain-of-thought is deliberately never exposed.
 
 ## Wake-word voice mode
 
-The kiosk wake phrase defaults to **يا غروب**. After the browser's one-time microphone permission,
-the lightweight wake listener remains active while the page is visible. The wake phrase opens one
-WebRTC session; subsequent turns flow directly as audio without repeating it. Semantic VAD detects
-turn completion and the guest can interrupt غروب while she is speaking. The session returns to wake
-mode after two minutes of inactivity, a microphone-button tap, page hiding, or an explicit ending.
-Set `VOICE_WAKE_WORD` to change the phrase. Chrome/Edge on localhost or HTTPS is recommended.
+The kiosk wake phrase defaults to **يا غروب**. `VOICE_ACTIVATION_MODE=wake` keeps the lightweight
+wake listener active while the page is visible, then opens one WebRTC session for the conversation.
+Use `always_on` only for installations that intentionally keep Realtime active, or `button` to
+require an explicit microphone tap. Semantic VAD detects turn completion and the guest can interrupt
+غروب while she is speaking. Wake-mode sessions close after two minutes of inactivity, a microphone
+button tap, page hiding, or an explicit ending. Chrome/Edge on localhost or HTTPS is recommended.
 
 Realtime defaults are configured with `REALTIME_MODEL=gpt-realtime-2.1`,
 `REALTIME_VOICE=marin`, and `REALTIME_TRANSCRIPTION_MODEL=gpt-4o-transcribe`. The standard

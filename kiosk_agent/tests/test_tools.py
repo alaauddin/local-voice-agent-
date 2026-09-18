@@ -1,13 +1,12 @@
 import json
 
-from asgiref.sync import async_to_sync
 from django.test import TestCase, override_settings
 
 from kiosk_agent.core.prompt_builder import build_system_prompt
 from kiosk_agent.core.realtime import build_realtime_session
 from kiosk_agent.core.tools import execute_tool, openai_tool_schemas
 from kiosk_agent.core.voice import clean_spoken_text, split_spoken_text
-from kiosk_agent.models import ChaletConfig, KioskAuditLog
+from kiosk_agent.models import ChaletConfig, KioskAuditLog, StaffRequest
 
 
 class AgentToolTests(TestCase):
@@ -59,7 +58,7 @@ class AgentToolTests(TestCase):
             self.assertEqual(set(parameters["properties"]), set(parameters["required"]))
 
     def test_staff_request_urgency_is_required(self):
-        result = async_to_sync(execute_tool)(
+        result = execute_tool(
             "request_property_staff",
             json.dumps({"service": "housekeeping", "details": "Fresh towels"}),
             stay_id=str(self.config.current_stay_id),
@@ -68,7 +67,7 @@ class AgentToolTests(TestCase):
         self.assertEqual(json.loads(result)["error"], "validation_error")
 
     def test_staff_request_is_validated_and_audited(self):
-        result = async_to_sync(execute_tool)(
+        result = execute_tool(
             "request_property_staff",
             json.dumps({"service": "housekeeping", "details": "Fresh towels", "urgency": "normal"}),
             stay_id=str(self.config.current_stay_id),
@@ -77,9 +76,11 @@ class AgentToolTests(TestCase):
         self.assertTrue(json.loads(result)["result"]["accepted"])
         self.assertEqual(KioskAuditLog.objects.filter(event="tool_called").count(), 1)
         self.assertEqual(KioskAuditLog.objects.get(event="tool_called").details["chalet_number"], "101")
+        self.assertEqual(StaffRequest.objects.count(), 1)
+        self.assertEqual(StaffRequest.objects.get().service, "housekeeping")
 
     def test_invalid_tool_input_returns_safe_error(self):
-        result = async_to_sync(execute_tool)(
+        result = execute_tool(
             "request_property_staff",
             json.dumps({"service": "unsupported", "details": "x"}),
             stay_id=str(self.config.current_stay_id),

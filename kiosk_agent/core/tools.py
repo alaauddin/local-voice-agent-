@@ -1,12 +1,14 @@
 import json
-from collections.abc import Awaitable, Callable
+import logging
+from collections.abc import Callable
 from typing import Literal
 
-from asgiref.sync import sync_to_async
-from django.db import close_old_connections
+from django.db import close_old_connections, transaction
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from kiosk_agent.models import ChaletConfig, KioskAuditLog
+from kiosk_agent.models import ChaletConfig, KioskAuditLog, StaffRequest
+
+logger = logging.getLogger(__name__)
 
 
 class StrictToolInput(BaseModel):
@@ -89,11 +91,12 @@ def realtime_tool_schemas() -> list[dict]:
     return tools
 
 
-@sync_to_async(thread_sensitive=True)
 def _property_information(args: PropertyInfoInput, stay_id: str, request_id: str) -> dict:
     close_old_connections()
     try:
         config = ChaletConfig.load()
+        if str(config.current_stay_id) != str(stay_id):
+            return {"found": False, "reason": "stay_expired", "facts": {}}
         topic = args.topic.casefold()
         matches = {
             key: value
@@ -105,85 +108,89 @@ def _property_information(args: PropertyInfoInput, stay_id: str, request_id: str
         close_old_connections()
 
 
-@sync_to_async(thread_sensitive=True)
-def _staff_request(args: StaffRequestInput, stay_id: str, request_id: str) -> dict:
+def _staff_request_local(args: StaffRequestInput, stay_id: str, request_id: str) -> dict:
     close_old_connections()
     try:
-        config = ChaletConfig.load()
-        enabled = not config.enabled_services or args.service in config.enabled_services
-        if not enabled:
-            return {"accepted": False, "reason": "service_not_enabled"}
-        log = KioskAuditLog.objects.create(
-            stay_id=stay_id,
-            request_id=request_id,
-            event=KioskAuditLog.Event.TOOL_CALLED,
-            details={"tool": "request_property_staff", "chalet_number": config.chalet_number, **args.model_dump()},
-        )
-        return {"accepted": True, "reference": f"SR-{log.pk:06d}", "urgency": args.urgency}
+        with transaction.atomic():
+            config = ChaletConfig.objects.select_for_update().get(pk=ChaletConfig.SINGLETON_PK)
+            if str(config.current_stay_id) != str(stay_id):
+                return {"accepted": False, "reason": "stay_expired"}
+            enabled = not config.enabled_services or args.service in config.enabled_services
+            if not enabled:
+                return {"accepted": False, "reason": "service_not_enabled"}
+            staff_request = StaffRequest.objects.create(
+                stay_id=stay_id,
+                request_id=request_id,
+                service=args.service,
+                details=args.details,
+                urgency=args.urgency,
+                delivery_status=StaffRequest.DeliveryStatus.QUEUED,
+            )
+            staff_request.local_reference = f"SR-{staff_request.pk:06d}"
+            staff_request.save(update_fields=("local_reference", "updated_at"))
+            KioskAuditLog.objects.create(
+                stay_id=stay_id,
+                request_id=request_id,
+                event=KioskAuditLog.Event.TOOL_CALLED,
+                details={
+                    "tool": "request_property_staff",
+                    "chalet_number": config.chalet_number,
+                    "reference": staff_request.local_reference,
+                    **args.model_dump(),
+                },
+            )
+            from kiosk_agent.tasks import forward_staff_request_task
+
+            def enqueue_forwarding():
+                try:
+                    forward_staff_request_task.delay(staff_request.pk)
+                except Exception:
+                    logger.exception(
+                        "Unable to queue SaaS delivery for staff request %s",
+                        staff_request.local_reference,
+                    )
+                    StaffRequest.objects.filter(pk=staff_request.pk).update(
+                        delivery_status=StaffRequest.DeliveryStatus.FAILED,
+                        last_error="delivery_queue_unavailable",
+                    )
+
+            transaction.on_commit(enqueue_forwarding)
+        return {
+            "accepted": True,
+            "reference": staff_request.local_reference,
+            "urgency": args.urgency,
+            "delivery_status": staff_request.delivery_status,
+        }
     finally:
         close_old_connections()
 
 
-async def _staff_request_async(args: StaffRequestInput, stay_id: str, request_id: str) -> dict:
-    from asgiref.sync import sync_to_async as _sta
-    from django.db import close_old_connections as _coc
-    from kiosk_agent.models import ChaletConfig as _CC, KioskAuditLog as _KAL
-    from kiosk_agent.integrations.saas import forward_request_to_saas as _fwd
-
-    @_sta(thread_sensitive=True)
-    def _create():
-        _coc()
-        try:
-            cfg = _CC.load()
-            en = not cfg.enabled_services or args.service in cfg.enabled_services
-            if not en:
-                return None, {"accepted": False, "reason": "service_not_enabled"}, None
-            lg = _KAL.objects.create(stay_id=stay_id, request_id=request_id, event=_KAL.Event.TOOL_CALLED, details={"tool": "request_property_staff", "chalet_number": cfg.chalet_number, **args.model_dump()})
-            ref = f"SR-{lg.pk:06d}"
-            return cfg, {"accepted": True, "reference": ref, "urgency": args.urgency}, ref
-        finally:
-            _coc()
-    cfg, result, ref = await _create()
-    if not result.get("accepted"):
-        return result
-    try:
-        saas_res = await _fwd(config=cfg, service=args.service, details=args.details, urgency=args.urgency, stay_id=stay_id, request_id=request_id, local_reference=ref)
-        result["saas_forwarded"] = bool(saas_res.get("forwarded"))
-        if saas_res.get("forwarded"):
-            result["saas_reference"] = saas_res.get("response", {}).get("id")
-        else:
-            result["saas_error"] = saas_res.get("reason") or saas_res.get("error") or str(saas_res.get("status_code") or "")
-    except Exception as exc:
-        result["saas_forwarded"] = False
-        result["saas_error"] = str(exc)[:300]
-    return result
-
-
-@sync_to_async(thread_sensitive=True)
 def _emergency_contact(args: EmergencyContactInput, stay_id: str, request_id: str) -> dict:
     close_old_connections()
     try:
         config = ChaletConfig.load()
+        if str(config.current_stay_id) != str(stay_id):
+            return {"configured": False, "reason": "stay_expired", "contact": ""}
         return {"configured": bool(config.emergency_contact), "contact": config.emergency_contact}
     finally:
         close_old_connections()
 
 
-TOOL_HANDLERS: dict[str, Callable[..., Awaitable[dict]]] = {
+TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
     "get_property_information": _property_information,
-    "request_property_staff": _staff_request_async,
+    "request_property_staff": _staff_request_local,
     "get_emergency_contact": _emergency_contact,
 }
 
 
-async def execute_tool(name: str, raw_arguments: str, *, stay_id: str, request_id: str) -> str:
+def execute_tool(name: str, raw_arguments: str, *, stay_id: str, request_id: str) -> str:
     model = TOOL_MODELS.get(name)
     handler = TOOL_HANDLERS.get(name)
     if not model or not handler:
         return json.dumps({"ok": False, "error": "unknown_tool"})
     try:
         args = model.model_validate_json(raw_arguments or "{}")
-        result = await handler(args, stay_id, request_id)
+        result = handler(args, stay_id, request_id)
         return json.dumps({"ok": True, "result": result}, ensure_ascii=False, default=str)
     except ValidationError as exc:
         return json.dumps({"ok": False, "error": "validation_error", "details": exc.errors(include_url=False)})

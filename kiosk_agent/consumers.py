@@ -1,4 +1,5 @@
 import secrets
+import uuid
 from urllib.parse import parse_qs
 
 from asgiref.sync import sync_to_async
@@ -8,8 +9,10 @@ from django.conf import settings
 
 from .core.agent_engine import stay_group
 from .models import ChaletConfig
+from .permissions import KIOSK_COOKIE_NAME, valid_kiosk_cookie
 from .serializers import ChatRequestSerializer
 from .services import AgentBusyError, enqueue_message
+from .tasks import welcome_tts_task
 
 
 class KioskConsumer(AsyncJsonWebsocketConsumer):
@@ -30,6 +33,25 @@ class KioskConsumer(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def receive_json(self, content, **kwargs):
+        if content.get("type") == "voice.welcome" and settings.VOICE_SOURCE == "backend":
+            try:
+                request_id = str(uuid.UUID(str(content.get("request_id", ""))))
+            except (TypeError, ValueError):
+                await self.send_json({"event": "error", "message": "Invalid welcome request."})
+                return
+            stay_id = await self._current_stay_id()
+            try:
+                await sync_to_async(welcome_tts_task.delay, thread_sensitive=False)(
+                    stay_id, request_id
+                )
+            except Exception:
+                await self.send_json({
+                    "event": "tts_fallback",
+                    "request_id": request_id,
+                    "nonce": request_id,
+                    "text": "أهلاً وسهلاً، أنا معك. تفضل.",
+                })
+            return
         if content.get("type") != "chat.message":
             await self.send_json({"event": "error", "message": "Unsupported event type."})
             return
@@ -55,7 +77,7 @@ class KioskConsumer(AsyncJsonWebsocketConsumer):
 
     def _valid_key(self):
         expected = settings.KIOSK_API_KEY
-        if not expected:
-            return True
         supplied = parse_qs(self.scope.get("query_string", b"").decode()).get("key", [""])[0]
-        return secrets.compare_digest(supplied, expected)
+        if expected and supplied and secrets.compare_digest(supplied, expected):
+            return True
+        return valid_kiosk_cookie(self.scope.get("cookies", {}).get(KIOSK_COOKIE_NAME, ""))

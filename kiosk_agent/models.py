@@ -2,6 +2,7 @@ import uuid
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 
 class ChaletConfig(models.Model):
@@ -71,12 +72,36 @@ class KioskMessage(models.Model):
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.COMPLETE)
     tool_name = models.CharField(max_length=100, blank=True)
     tool_call_id = models.CharField(max_length=160, blank=True)
+    event_id = models.CharField(max_length=200, null=True, blank=True)
+    sequence = models.PositiveBigIntegerField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ("created_at", "id")
-        indexes = [models.Index(fields=("stay_id", "created_at"))]
+        indexes = [
+            models.Index(fields=("stay_id", "created_at")),
+            models.Index(
+                fields=("stay_id", "request_id", "role"),
+                name="kiosk_agent_stay_requ_role_idx",
+            ),
+            models.Index(
+                fields=("stay_id", "status", "role"),
+                name="kiosk_agent_stay_stat_role_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("stay_id", "event_id"),
+                condition=Q(event_id__isnull=False),
+                name="unique_stay_realtime_event",
+            ),
+            models.UniqueConstraint(
+                fields=("stay_id", "tool_call_id"),
+                condition=~Q(tool_call_id=""),
+                name="unique_stay_tool_call",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.role}: {self.content[:60]}"
@@ -102,3 +127,60 @@ class KioskAuditLog(models.Model):
 
     def __str__(self):
         return f"{self.event} at {self.created_at}"
+
+
+class RealtimeSession(models.Model):
+    class State(models.TextChoices):
+        ACTIVE = "active", "Active"
+        CLOSED = "closed", "Closed"
+        RESET = "reset", "Reset"
+        EXPIRED = "expired", "Expired"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stay_id = models.UUIDField(db_index=True)
+    state = models.CharField(max_length=16, choices=State.choices, default=State.ACTIVE)
+    expires_at = models.DateTimeField(db_index=True)
+    last_activity_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=("stay_id", "state"),
+                name="kiosk_agent_stay_state_rt_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.id} ({self.state})"
+
+
+class StaffRequest(models.Model):
+    class DeliveryStatus(models.TextChoices):
+        DISABLED = "disabled", "Disabled"
+        QUEUED = "queued", "Queued"
+        DELIVERED = "delivered", "Delivered"
+        FAILED = "failed", "Failed"
+
+    stay_id = models.UUIDField(db_index=True)
+    request_id = models.UUIDField(db_index=True)
+    service = models.CharField(max_length=40)
+    details = models.TextField(max_length=1000)
+    urgency = models.CharField(max_length=12)
+    local_reference = models.CharField(max_length=32, unique=True, blank=True)
+    delivery_status = models.CharField(
+        max_length=16,
+        choices=DeliveryStatus.choices,
+        default=DeliveryStatus.DISABLED,
+    )
+    external_reference = models.CharField(max_length=160, blank=True)
+    delivery_attempts = models.PositiveSmallIntegerField(default=0)
+    last_error = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return self.local_reference or f"Staff request {self.pk}"
