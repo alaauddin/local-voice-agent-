@@ -18,13 +18,14 @@ from rest_framework.views import APIView
 from .core.agent_engine import stay_group
 from .core.realtime import create_realtime_call
 from .core.tools import TOOL_MODELS, execute_tool
-from .models import ChaletConfig, KioskAuditLog, KioskMessage, RealtimeSession
+from .models import ChaletConfig, KioskAuditLog, KioskMessage, RealtimeSession, RemoteControl
 from .permissions import (
     KIOSK_COOKIE_NAME,
     OptionalKioskKeyPermission,
     create_kiosk_cookie,
     valid_kiosk_cookie,
 )
+from .remote_control import RemoteCommandError, press_remote_button
 from .serializers import (
     ChaletPublicSerializer,
     ChatRequestSerializer,
@@ -32,6 +33,7 @@ from .serializers import (
     RealtimeMessageSerializer,
     RealtimeSessionIdentitySerializer,
     RealtimeToolSerializer,
+    RemoteControlPublicSerializer,
 )
 from .services import AgentBusyError, enqueue_message
 
@@ -418,5 +420,64 @@ class StatusView(APIView):
                 "last_agent_failure_at": (
                     last_failure.created_at if last_failure else None
                 ),
+            }
+        )
+
+
+class RemotesListView(APIView):
+    authentication_classes = []
+    permission_classes = (OptionalKioskKeyPermission,)
+
+    def get(self, request):
+        remotes = (
+            RemoteControl.objects.filter(is_active=True, guest_visible=True)
+            .prefetch_related("buttons")
+            .order_by("sort_order", "name")
+        )
+        # Only expose remotes that have at least one active button.
+        payload = []
+        for remote in remotes:
+            active_buttons = [b for b in remote.buttons.all() if b.is_active]
+            if not active_buttons:
+                continue
+            payload.append(RemoteControlPublicSerializer(remote).data)
+        return Response({"remotes": payload})
+
+
+class RemoteButtonPressView(APIView):
+    authentication_classes = []
+    permission_classes = (OptionalKioskKeyPermission,)
+
+    def post(self, request, button_id):
+        config = ChaletConfig.load()
+        try:
+            result = press_remote_button(
+                int(button_id),
+                source="kiosk",
+                stay_id=config.current_stay_id,
+                require_guest_visible=True,
+            )
+        except RemoteCommandError as exc:
+            status_map = {
+                "not_found": status.HTTP_404_NOT_FOUND,
+                "forbidden": status.HTTP_403_FORBIDDEN,
+                "unconfigured": status.HTTP_400_BAD_REQUEST,
+                "invalid_url": status.HTTP_400_BAD_REQUEST,
+                "cooldown": status.HTTP_429_TOO_MANY_REQUESTS,
+                "timeout": status.HTTP_504_GATEWAY_TIMEOUT,
+                "network_error": status.HTTP_502_BAD_GATEWAY,
+                "http_error": status.HTTP_502_BAD_GATEWAY,
+                "controller_error": status.HTTP_502_BAD_GATEWAY,
+            }
+            return Response(
+                {"ok": False, "status": exc.code, "detail": exc.message},
+                status=status_map.get(exc.code, status.HTTP_400_BAD_REQUEST),
+            )
+        return Response(
+            {
+                "ok": True,
+                "status": "success",
+                "label": result.get("label"),
+                "target": result.get("target") or "",
             }
         )

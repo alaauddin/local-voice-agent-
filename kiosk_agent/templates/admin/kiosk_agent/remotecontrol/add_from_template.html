@@ -1,0 +1,29 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      {% for field in form %}
+      <div class="form-row">
+        {{ field.errors }}
+        <div>
+          <label for="{{ field.id_for_label }}">{{ field.label }}:</label>
+          {{ field }}
+          {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" value="Create remote" class="default">
+      <a href="{% url 'admin:kiosk_agent_remotecontrol_changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+  </form>
+  <p class="help">
+    Template buttons are copied once with empty command URLs. Later template edits do not change this remote.
+  </p>
+</div>
+{% endblock %}

@@ -8,6 +8,8 @@ from .views import (
     RealtimeSessionCloseView,
     RealtimeSessionView,
     RealtimeToolView,
+    RemoteButtonPressView,
+    RemotesListView,
     ResetView,
     StatusView,
 )
@@ -25,6 +27,12 @@ urlpatterns = [
     ),
     path("realtime/messages/", RealtimeMessageView.as_view(), name="realtime-message"),
     path("realtime/tools/", RealtimeToolView.as_view(), name="realtime-tool"),
+    path("remotes/", RemotesListView.as_view(), name="remotes"),
+    path(
+        "remote-buttons/<int:button_id>/press/",
+        RemoteButtonPressView.as_view(),
+        name="remote-button-press",
+    ),
     path("reset/", ResetView.as_view(), name="reset"),
     path("health/", HealthView.as_view(), name="health"),
     path("status/", StatusView.as_view(), name="status"),

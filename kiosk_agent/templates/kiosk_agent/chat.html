@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=sunset-voice-4">
+  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=sunset-remotes-2">
 </head>
 <body>
   <main class="kiosk-shell">
@@ -60,28 +60,49 @@
       </button>
 
       <div class="voice-canvas">
-        <div class="welcome" id="welcomeCard">
-          <div class="avatar-stage" id="avatarStage" data-state="idle">
-            <video class="avatar-video active" data-avatar-state="idle" data-src="{% static 'kiosk_agent/videos/idle.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
-            <video class="avatar-video" data-avatar-state="thinking" data-src="{% static 'kiosk_agent/videos/thinking.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
-            <video class="avatar-video" data-avatar-state="speaking" data-src="{% static 'kiosk_agent/videos/speaking.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
-            <div class="avatar-glow"></div>
+        <div class="voice-stage" id="voiceStage">
+          <div class="welcome" id="welcomeCard">
+            <div class="avatar-stage" id="avatarStage" data-state="idle">
+              <video class="avatar-video active" data-avatar-state="idle" data-src="{% static 'kiosk_agent/videos/idle.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
+              <video class="avatar-video" data-avatar-state="thinking" data-src="{% static 'kiosk_agent/videos/thinking.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
+              <video class="avatar-video" data-avatar-state="speaking" data-src="{% static 'kiosk_agent/videos/speaking.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
+              <div class="avatar-glow"></div>
+            </div>
+            <button class="mic-button" id="micButton" type="button" aria-label="ابدأ التحدث">
+              <span class="mic-ring ring-one"></span>
+              <span class="mic-ring ring-two"></span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
+            </button>
+            <p class="voice-status" id="voiceStatus">قل «{{ voice_wake_word }}» لبدء المحادثة</p>
+            <p class="interim-transcript" id="interimTranscript" dir="auto"></p>
+            <h2>مرحباً بك في منتجع الغروب</h2>
+            <p id="welcomeMessage">قل «يا غروب» واطلب ما تحتاجه، وسأبقى معك طوال المحادثة.</p>
+            <div class="suggestions" id="suggestions">
+              <button type="button" data-message="أحتاج بطاقة واي فاي"><span>⌁</span> بطاقات الواي فاي</button>
+              <button type="button" data-message="ما مرافق المنتجع المتاحة؟"><span>♧</span> مرافق المنتجع</button>
+              <button type="button" data-message="أحتاج خدمة للشاليه"><span>⌂</span> خدمات الشاليه</button>
+              <button type="button" data-message="ما الأنشطة المتاحة؟"><span>◌</span> الأنشطة</button>
+            </div>
           </div>
-          <button class="mic-button" id="micButton" type="button" aria-label="ابدأ التحدث">
-            <span class="mic-ring ring-one"></span>
-            <span class="mic-ring ring-two"></span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
-          </button>
-          <p class="voice-status" id="voiceStatus">قل «{{ voice_wake_word }}» لبدء المحادثة</p>
-          <p class="interim-transcript" id="interimTranscript" dir="auto"></p>
-          <h2>مرحباً بك في منتجع الغروب</h2>
-          <p id="welcomeMessage">قل «يا غروب» واطلب ما تحتاجه، وسأبقى معك طوال المحادثة.</p>
-          <div class="suggestions" id="suggestions">
-            <button type="button" data-message="أحتاج بطاقة واي فاي"><span>⌁</span> بطاقات الواي فاي</button>
-            <button type="button" data-message="ما مرافق المنتجع المتاحة؟"><span>♧</span> مرافق المنتجع</button>
-            <button type="button" data-message="أحتاج خدمة للشاليه"><span>⌂</span> خدمات الشاليه</button>
-            <button type="button" data-message="ما الأنشطة المتاحة؟"><span>◌</span> الأنشطة</button>
-          </div>
+
+          <aside class="remotes-panel" id="remotesPanel" hidden aria-label="أجهزة التحكم">
+            <header class="remotes-header">
+              <div>
+                <small>التحكم بالأجهزة</small>
+                <strong id="remoteTitle">الريموت</strong>
+              </div>
+              <p class="remote-location" id="remoteLocation"></p>
+            </header>
+            <div class="remotes-carousel" id="remotesCarousel" tabindex="0" role="region" aria-roledescription="carousel" aria-label="الريموتات">
+              <div class="remotes-track" id="remotesTrack"></div>
+            </div>
+            <div class="remotes-nav">
+              <button type="button" id="remotePrev" aria-label="الريموت السابق">‹</button>
+              <div class="remote-dots" id="remoteDots" role="tablist" aria-label="اختيار الريموت"></div>
+              <button type="button" id="remoteNext" aria-label="الريموت التالي">›</button>
+            </div>
+            <p class="remote-feedback" id="remoteFeedback" role="status" aria-live="polite"></p>
+          </aside>
         </div>
       </div>
 
@@ -144,6 +165,16 @@
     </div>
   </dialog>
 
-  <script src="{% static 'kiosk_agent/chat.js' %}?v=sunset-realtime-5" defer></script>
+  <dialog id="remoteConfirmDialog">
+    <div class="dialog-icon">⏻</div>
+    <h2 id="remoteConfirmTitle">تأكيد الأمر</h2>
+    <p id="remoteConfirmText">هل تريد تنفيذ هذا الأمر؟</p>
+    <div class="dialog-actions">
+      <button type="button" id="cancelRemoteConfirm">إلغاء</button>
+      <button type="button" id="confirmRemotePress">تنفيذ</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=sunset-modules-1"></script>
 </body>
 </html>

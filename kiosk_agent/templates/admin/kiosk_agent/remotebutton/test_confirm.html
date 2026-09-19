@@ -1,0 +1,19 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div id="content-main">
+  <p>
+    This will send the stored GET command for
+    <strong>{{ button.remote.name }}</strong> → <strong>{{ button.label }}</strong>
+    to the LAN controller. The physical device may change state.
+  </p>
+  <p>The full command URL is not shown here and will not be written to audit logs.</p>
+  <form method="post">
+    {% csrf_token %}
+    <div class="submit-row">
+      <input type="submit" value="Send test command" class="default" style="background:#ba2121;">
+      <a href="{% url 'admin:kiosk_agent_remotecontrol_change' button.remote_id %}" class="button cancel-link">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

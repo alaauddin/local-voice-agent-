@@ -115,6 +115,8 @@ class KioskAuditLog(models.Model):
         AGENT_COMPLETED = "agent_completed", "Agent completed"
         AGENT_FAILED = "agent_failed", "Agent failed"
         STAY_RESET = "stay_reset", "Stay reset"
+        REMOTE_PRESSED = "remote_pressed", "Remote pressed"
+        REMOTE_FAILED = "remote_failed", "Remote failed"
 
     stay_id = models.UUIDField(db_index=True)
     request_id = models.UUIDField(null=True, blank=True, db_index=True)
@@ -184,3 +186,134 @@ class StaffRequest(models.Model):
 
     def __str__(self):
         return self.local_reference or f"Staff request {self.pk}"
+
+
+class RemoteTemplate(models.Model):
+    class Category(models.TextChoices):
+        AC = "ac", "AC"
+        FAN = "fan", "Fan"
+        LIGHTS = "lights", "Lights"
+        OTHER = "other", "Other"
+
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=120, unique=True)
+    category = models.CharField(max_length=20, choices=Category.choices, default=Category.OTHER)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self):
+        return self.name
+
+
+class RemoteTemplateButton(models.Model):
+    template = models.ForeignKey(
+        RemoteTemplate,
+        on_delete=models.CASCADE,
+        related_name="buttons",
+    )
+    key = models.SlugField(max_length=80)
+    label = models.CharField(max_length=80)
+    icon = models.CharField(max_length=40, blank=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    row = models.PositiveSmallIntegerField(default=0)
+    column = models.PositiveSmallIntegerField(default=0)
+    requires_confirmation = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ("sort_order", "row", "column", "id")
+        constraints = [
+            models.UniqueConstraint(fields=("template", "key"), name="uniq_template_button_key"),
+            models.UniqueConstraint(
+                fields=("template", "row", "column"),
+                name="uniq_template_button_position",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.template.slug}:{self.key}"
+
+
+class RemoteControl(models.Model):
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=120, unique=True)
+    location = models.CharField(max_length=120, blank=True)
+    template = models.ForeignKey(
+        RemoteTemplate,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="remotes",
+    )
+    template_slug = models.SlugField(max_length=120, blank=True)
+    is_active = models.BooleanField(default=True)
+    voice_enabled = models.BooleanField(
+        default=False,
+        help_text="Allow voice tools to press buttons on this remote.",
+    )
+    guest_visible = models.BooleanField(
+        default=True,
+        help_text="Show this remote on the kiosk guest panel.",
+    )
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("sort_order", "name")
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def configured_count(self) -> int:
+        return self.buttons.filter(is_active=True).exclude(command_url="").count()
+
+    @property
+    def active_button_count(self) -> int:
+        return self.buttons.filter(is_active=True).count()
+
+
+class RemoteButton(models.Model):
+    remote = models.ForeignKey(
+        RemoteControl,
+        on_delete=models.CASCADE,
+        related_name="buttons",
+    )
+    key = models.SlugField(max_length=80)
+    label = models.CharField(max_length=80)
+    icon = models.CharField(max_length=40, blank=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    row = models.PositiveSmallIntegerField(default=0)
+    column = models.PositiveSmallIntegerField(default=0)
+    command_url = models.CharField(max_length=500, blank=True)
+    is_active = models.BooleanField(default=True)
+    requires_confirmation = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ("sort_order", "row", "column", "id")
+        constraints = [
+            models.UniqueConstraint(fields=("remote", "key"), name="uniq_remote_button_key"),
+            models.UniqueConstraint(
+                fields=("remote", "row", "column"),
+                name="uniq_remote_button_position",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.remote.slug}:{self.key}"
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.command_url and self.command_url.strip())
+
+    def clean(self):
+        from kiosk_agent.remote_control import validate_command_url
+
+        super().clean()
+        if self.command_url.strip():
+            validate_command_url(self.command_url)

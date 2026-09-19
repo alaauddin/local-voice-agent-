@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import ChaletConfig, KioskMessage
+from .models import ChaletConfig, KioskMessage, RemoteButton, RemoteControl
 
 
 class ChatRequestSerializer(serializers.Serializer):
@@ -53,3 +53,43 @@ class ChaletPublicSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChaletConfig
         fields = ("chalet_name", "persona_name", "welcome_message", "enabled_services")
+
+
+class RemoteButtonPublicSerializer(serializers.ModelSerializer):
+    configured = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RemoteButton
+        fields = (
+            "id",
+            "key",
+            "label",
+            "icon",
+            "row",
+            "column",
+            "sort_order",
+            "requires_confirmation",
+            "configured",
+        )
+
+    def get_configured(self, obj):
+        return obj.is_configured
+
+
+class RemoteControlPublicSerializer(serializers.ModelSerializer):
+    buttons = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RemoteControl
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "location",
+            "sort_order",
+            "buttons",
+        )
+
+    def get_buttons(self, obj):
+        buttons = [button for button in obj.buttons.all() if button.is_active]
+        return RemoteButtonPublicSerializer(buttons, many=True).data

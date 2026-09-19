@@ -159,6 +159,219 @@ button { cursor: pointer; }
 
 .voice-canvas { min-height: 0; display: grid; place-items: center; padding: 24px 28px 8px; overflow-y: auto; }
 
+.voice-stage {
+  width: min(1100px, 100%);
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  gap: clamp(18px, 3vw, 36px);
+}
+
+.voice-stage.has-remotes {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+}
+
+.voice-stage.has-remotes .avatar-stage {
+  width: clamp(220px, 32vh, 340px);
+  height: clamp(220px, 32vh, 340px);
+}
+
+.voice-stage.has-remotes .welcome h2 {
+  font-size: clamp(22px, 2.4vw, 30px);
+}
+
+.voice-stage.has-remotes .suggestions {
+  margin-top: 22px;
+}
+
+.remotes-panel {
+  width: min(340px, 100%);
+  margin: 0 auto;
+  padding: 16px 14px 14px;
+  direction: rtl;
+  text-align: right;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.72), rgba(248,242,233,.88)),
+    radial-gradient(circle at 20% 0%, rgba(117,201,193,.18), transparent 55%);
+  border: 1px solid rgba(77,133,128,.22);
+  border-radius: 24px;
+  box-shadow: 0 16px 40px rgba(77,133,128,.12);
+  animation: rise .45s ease-out;
+}
+
+.remotes-panel[hidden] { display: none !important; }
+
+.remotes-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.remotes-header small {
+  display: block;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.remotes-header strong {
+  color: var(--forest);
+  font-size: 15px;
+}
+
+.remote-location {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  max-width: 46%;
+  text-align: left;
+}
+
+.remotes-carousel {
+  overflow: hidden;
+  touch-action: pan-y;
+  border-radius: 18px;
+  outline: none;
+  direction: ltr;
+}
+
+.remotes-track {
+  display: flex;
+  direction: ltr;
+  transition: transform .28s ease;
+  will-change: transform;
+}
+
+.remote-slide {
+  flex: 0 0 100%;
+  min-width: 100%;
+  padding: 4px;
+  direction: rtl;
+}
+
+.remote-grid {
+  display: grid;
+  gap: 8px;
+  grid-auto-rows: minmax(52px, auto);
+}
+
+.remote-button {
+  position: relative;
+  z-index: 2;
+  min-height: 52px;
+  padding: 10px 8px;
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  color: var(--forest);
+  background: rgba(255,255,255,.78);
+  border: 1px solid rgba(77,133,128,.22);
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .15s ease, background .15s ease, border-color .15s ease;
+}
+
+.remote-button span.icon {
+  color: var(--gold);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.remote-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(117,201,193,.8);
+  background: #fff;
+}
+
+.remote-button:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+}
+
+.remote-button.sending {
+  opacity: .7;
+  pointer-events: none;
+}
+
+.remote-button.success {
+  border-color: rgba(102,199,149,.7);
+  background: rgba(102,199,149,.12);
+}
+
+.remote-button.error {
+  border-color: rgba(168,94,76,.45);
+  background: rgba(168,94,76,.1);
+}
+
+.remotes-nav {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+  gap: 8px;
+}
+
+.remotes-nav button {
+  width: 36px;
+  height: 36px;
+  color: var(--forest);
+  background: rgba(255,255,255,.7);
+  border: 1px solid rgba(77,133,128,.18);
+  border-radius: 12px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.remotes-nav button:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.remote-dots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+}
+
+.remote-dots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(77,133,128,.28);
+}
+
+.remote-dots button.active {
+  background: var(--gold);
+  transform: scale(1.15);
+}
+
+.remote-feedback {
+  min-height: 18px;
+  margin: 10px 4px 0;
+  color: var(--forest-soft);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.remote-feedback.is-error { color: var(--danger); }
+.remote-feedback.is-success { color: #3d8f6a; }
+
+#remoteConfirmDialog #confirmRemotePress {
+  color: #fff;
+  background: var(--forest-soft);
+  border-color: var(--forest-soft);
+}
+
 .messages-drawer {
   position: absolute;
   z-index: 8;
@@ -349,10 +562,18 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
   .mobile-status { width: 9px; height: 9px; border-radius: 50%; background: #e5b85f; }
   .mobile-status.online { background: #66c795; }
   .voice-canvas { padding: 18px 14px 6px; }
+  .voice-stage.has-remotes {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .remotes-panel {
+    width: min(420px, 100%);
+    order: 2;
+  }
+  .welcome { order: 1; margin-top: 2vh; }
+  .avatar-stage { width: min(280px, 34vh, 72vw); height: min(280px, 34vh, 72vw); }
   .messages-drawer { inset: 82px 12px 98px; border-radius: 22px; }
   .messages { padding: 18px 14px; }
-  .welcome { margin-top: 2vh; }
-  .avatar-stage { width: min(330px, 38vh, 82vw); height: min(330px, 38vh, 82vw); }
   .voice-settings-button { top: 15px; left: 68px; color: var(--forest); background: rgba(255,255,255,.48); border-color: rgba(77,133,128,.18); }
   .messages-toggle { top: 15px; left: 118px; color: var(--forest); background: rgba(255,255,255,.48); border-color: rgba(77,133,128,.18); }
   .suggestions { margin-top: 25px; }

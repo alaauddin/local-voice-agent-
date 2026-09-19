@@ -1,12 +1,24 @@
-from django.contrib import admin
+from django import forms
+from django.contrib import admin, messages
+from django.db import transaction
+from django.http import HttpResponseForbidden, HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
+from django.urls import path, reverse
+from django.utils.html import format_html
+from django.utils.text import slugify
 
 from .models import (
     ChaletConfig,
     KioskAuditLog,
     KioskMessage,
     RealtimeSession,
+    RemoteButton,
+    RemoteControl,
+    RemoteTemplate,
+    RemoteTemplateButton,
     StaffRequest,
 )
+from .remote_control import RemoteCommandError, press_remote_button, validate_command_url
 
 
 @admin.register(ChaletConfig)
@@ -92,3 +104,220 @@ class StaffRequestAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
+
+
+class RemoteTemplateButtonInline(admin.TabularInline):
+    model = RemoteTemplateButton
+    extra = 1
+    fields = ("key", "label", "icon", "row", "column", "sort_order", "requires_confirmation")
+
+
+@admin.register(RemoteTemplate)
+class RemoteTemplateAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "category", "is_active", "button_count", "updated_at")
+    list_filter = ("category", "is_active")
+    search_fields = ("name", "slug", "description")
+    prepopulated_fields = {"slug": ("name",)}
+    inlines = (RemoteTemplateButtonInline,)
+
+    @admin.display(description="Buttons")
+    def button_count(self, obj):
+        return obj.buttons.count()
+
+
+class RemoteButtonForm(forms.ModelForm):
+    class Meta:
+        model = RemoteButton
+        fields = "__all__"
+
+    def clean_command_url(self):
+        value = (self.cleaned_data.get("command_url") or "").strip()
+        if value:
+            validate_command_url(value)
+        return value
+
+
+class RemoteButtonInline(admin.TabularInline):
+    model = RemoteButton
+    form = RemoteButtonForm
+    extra = 0
+    fields = (
+        "key",
+        "label",
+        "icon",
+        "row",
+        "column",
+        "sort_order",
+        "command_url",
+        "is_active",
+        "requires_confirmation",
+        "test_link",
+    )
+    readonly_fields = ("test_link",)
+
+    @admin.display(description="Test")
+    def test_link(self, obj):
+        if not obj.pk or not obj.is_configured:
+            return "—"
+        url = reverse("admin:kiosk_agent_remotebutton_test", args=[obj.pk])
+        return format_html('<a class="button" href="{}">Test</a>', url)
+
+
+class AddRemoteFromTemplateForm(forms.Form):
+    template = forms.ModelChoiceField(
+        queryset=RemoteTemplate.objects.filter(is_active=True),
+        label="Template",
+    )
+    name = forms.CharField(max_length=120)
+    slug = forms.SlugField(max_length=120, required=False)
+    location = forms.CharField(max_length=120, required=False)
+    guest_visible = forms.BooleanField(required=False, initial=True)
+    voice_enabled = forms.BooleanField(required=False, initial=False)
+
+
+@admin.register(RemoteControl)
+class RemoteControlAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "slug",
+        "location",
+        "configured_badge",
+        "is_active",
+        "guest_visible",
+        "voice_enabled",
+        "sort_order",
+        "updated_at",
+    )
+    list_filter = ("is_active", "guest_visible", "voice_enabled")
+    search_fields = ("name", "slug", "location")
+    prepopulated_fields = {"slug": ("name",)}
+    readonly_fields = ("template", "template_slug", "created_at", "updated_at")
+    inlines = (RemoteButtonInline,)
+    change_list_template = "admin/kiosk_agent/remotecontrol/change_list.html"
+
+    @admin.display(description="Configured")
+    def configured_badge(self, obj):
+        total = obj.active_button_count
+        done = obj.configured_count
+        return f"{done}/{total}"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "add-from-template/",
+                self.admin_site.admin_view(self.add_from_template_view),
+                name="kiosk_agent_remotecontrol_add_from_template",
+            ),
+        ]
+        return custom + urls
+
+    def add_from_template_view(self, request):
+        if not self.has_add_permission(request):
+            return HttpResponseForbidden("Permission denied.")
+        if request.method == "POST":
+            form = AddRemoteFromTemplateForm(request.POST)
+            if form.is_valid():
+                template = form.cleaned_data["template"]
+                name = form.cleaned_data["name"]
+                slug = form.cleaned_data["slug"] or slugify(name)
+                if not slug:
+                    form.add_error("slug", "Could not generate a slug from the name.")
+                elif RemoteControl.objects.filter(slug=slug).exists():
+                    form.add_error("slug", "A remote with this slug already exists.")
+                else:
+                    with transaction.atomic():
+                        remote = RemoteControl.objects.create(
+                            name=name,
+                            slug=slug,
+                            location=form.cleaned_data["location"],
+                            template=template,
+                            template_slug=template.slug,
+                            guest_visible=form.cleaned_data["guest_visible"],
+                            voice_enabled=form.cleaned_data["voice_enabled"],
+                        )
+                        RemoteButton.objects.bulk_create([
+                            RemoteButton(
+                                remote=remote,
+                                key=btn.key,
+                                label=btn.label,
+                                icon=btn.icon,
+                                sort_order=btn.sort_order,
+                                row=btn.row,
+                                column=btn.column,
+                                requires_confirmation=btn.requires_confirmation,
+                                command_url="",
+                                is_active=True,
+                            )
+                            for btn in template.buttons.all()
+                        ])
+                    self.message_user(
+                        request,
+                        f"Created remote “{remote.name}” with {remote.buttons.count()} buttons. Add command URLs next.",
+                        messages.SUCCESS,
+                    )
+                    return HttpResponseRedirect(
+                        reverse("admin:kiosk_agent_remotecontrol_change", args=[remote.pk])
+                    )
+        else:
+            form = AddRemoteFromTemplateForm(initial={"guest_visible": True})
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "form": form,
+            "title": "Add remote from template",
+        }
+        return render(request, "admin/kiosk_agent/remotecontrol/add_from_template.html", context)
+
+
+@admin.register(RemoteButton)
+class RemoteButtonAdmin(admin.ModelAdmin):
+    list_display = ("label", "remote", "key", "is_configured_display", "is_active", "requires_confirmation")
+    list_filter = ("is_active", "requires_confirmation", "remote")
+    search_fields = ("label", "key", "remote__name")
+    form = RemoteButtonForm
+
+    @admin.display(description="Configured", boolean=True)
+    def is_configured_display(self, obj):
+        return obj.is_configured
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "<int:button_id>/test/",
+                self.admin_site.admin_view(self.test_button_view),
+                name="kiosk_agent_remotebutton_test",
+            ),
+        ]
+        return custom + urls
+
+    def test_button_view(self, request, button_id):
+        button = get_object_or_404(RemoteButton.objects.select_related("remote"), pk=button_id)
+        if not self.has_change_permission(request, button):
+            return HttpResponseForbidden("Permission denied.")
+        if request.method == "POST":
+            try:
+                result = press_remote_button(button.pk, source="admin")
+                self.message_user(
+                    request,
+                    f"Success for “{button.remote.name} / {button.label}”"
+                    + (f" (target {result.get('target')})" if result.get("target") else ""),
+                    messages.SUCCESS,
+                )
+            except RemoteCommandError as exc:
+                self.message_user(
+                    request,
+                    f"Failed: {exc.message} ({exc.code})",
+                    messages.ERROR,
+                )
+            return HttpResponseRedirect(
+                reverse("admin:kiosk_agent_remotecontrol_change", args=[button.remote_id])
+            )
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "button": button,
+            "title": f"Test button: {button.label}",
+        }
+        return render(request, "admin/kiosk_agent/remotebutton/test_confirm.html", context)
