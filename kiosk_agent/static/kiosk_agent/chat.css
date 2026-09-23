@@ -594,6 +594,7 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 
 /* Assistant + device-control workspace */
 .workspace-tabs { display: none; }
+.composer[hidden], .composer-hint[hidden] { display: none !important; }
 
 .kiosk-shell {
   width: min(1600px, 100%);
@@ -669,6 +670,7 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 .app-header .reset-button svg { width: 17px; }
 
 .chat-panel {
+  grid-template-rows: auto 1fr auto;
   background:
     radial-gradient(circle at 82% 7%, rgba(117, 201, 193, .17), transparent 27%),
     radial-gradient(circle at 12% 90%, rgba(223, 135, 53, .09), transparent 26%),
@@ -683,7 +685,7 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 }
 
 .voice-stage {
-  width: min(1180px, 100%);
+  width: min(1320px, 100%);
   margin: auto;
   padding: clamp(4px, 1vw, 12px);
   border: 0;
@@ -693,8 +695,10 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 }
 
 .voice-stage.has-remotes {
-  grid-template-columns: minmax(440px, 1fr) minmax(330px, 390px);
-  gap: clamp(24px, 4vw, 58px);
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+  justify-content: center;
+  align-items: start;
+  gap: clamp(24px, 3vw, 48px);
 }
 
 .welcome {
@@ -732,8 +736,9 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 
 .voice-stage.has-remotes .avatar-stage,
 .avatar-stage {
-  width: clamp(340px, 48vh, 490px);
-  height: clamp(340px, 48vh, 490px);
+  width: min(100%, 540px);
+  height: auto;
+  aspect-ratio: 1;
   margin-bottom: -25px;
   border: 0;
   border-radius: 24px;
@@ -770,8 +775,13 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 .remotes-panel {
   position: relative;
   width: 100%;
-  max-width: 370px;
+  max-width: 720px;
+  height: min(720px, calc(100dvh - 150px));
+  min-height: 620px;
+  margin-top: 42px;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background:
     radial-gradient(circle at 18% 0, rgba(117,201,193,.15), transparent 30%),
@@ -800,18 +810,71 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 .remote-location { color: #9fb2af; }
 
 .remotes-carousel {
+  flex: 1;
+  min-height: 0;
   padding: 12px;
   background: rgba(7, 19, 18, .31);
   border-color: rgba(255,255,255,.07);
   border-radius: 24px;
   box-shadow: inset 0 2px 18px rgba(0,0,0,.22);
-  cursor: grab;
+  max-height: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  scroll-snap-type: y proximity;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(117,201,193,.34) transparent;
+  overscroll-behavior-y: contain;
 }
 
-.remotes-carousel:active { cursor: grabbing; }
-.remotes-track { transition: transform .42s cubic-bezier(.22, .72, .2, 1); }
-.remotes-track.dragging { transition: none; }
-.remote-slide { padding: 6px 2px; }
+.remotes-carousel::-webkit-scrollbar { width: 5px; }
+.remotes-carousel::-webkit-scrollbar-thumb { background: rgba(117,201,193,.34); border-radius: 999px; }
+.remotes-track {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  transition: none;
+}
+.remote-slide {
+  min-width: 0;
+  padding: 15px 12px 12px;
+  background: linear-gradient(145deg, rgba(52,79,76,.48), rgba(20,41,39,.54));
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 21px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 10px 24px rgba(0,0,0,.12);
+  scroll-snap-align: start;
+  transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+
+.remote-slide:hover {
+  transform: translateY(-2px);
+  border-color: rgba(117,201,193,.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 14px 28px rgba(0,0,0,.18);
+}
+
+.remote-slide-heading {
+  min-height: 40px;
+  margin-bottom: 10px;
+  padding: 0 4px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: right;
+}
+
+.remote-slide-heading > div { display: grid; gap: 3px; }
+.remote-slide-heading strong { color: #f4f8f7; font-size: 12px; }
+.remote-slide-heading small { color: #8fa7a3; font-size: 8px; }
+.remote-slide-heading > span {
+  padding: 5px 8px;
+  color: #9fd8d1;
+  background: rgba(117,201,193,.1);
+  border: 1px solid rgba(117,201,193,.14);
+  border-radius: 999px;
+  font-size: 8px;
+  white-space: nowrap;
+}
 .remote-grid { gap: 12px 10px; grid-auto-rows: minmax(60px, auto); }
 
 .remote-button {
@@ -886,6 +949,12 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 
 .remote-feedback { color: #a6bbb8; }
 
+@media (min-width: 801px) and (max-width: 1120px) {
+  .voice-stage.has-remotes { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
+  .voice-stage.has-remotes .avatar-stage { width: min(100%, 430px); height: auto; }
+  .remotes-track { grid-template-columns: 1fr; }
+}
+
 .composer {
   width: min(900px, calc(100% - 48px));
   background: rgba(255,255,255,.9);
@@ -943,6 +1012,7 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
   .app-header .header-status { flex: 0 1 auto; }
   .app-header .sunset-wordmark {
     min-width: max-content;
+    flex-direction: row;
     flex-wrap: nowrap;
     white-space: nowrap;
     font-size: 25px;
@@ -1051,8 +1121,8 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
   .assistant-label { margin-bottom: 10px; }
   .voice-stage.has-remotes .avatar-stage,
   .avatar-stage {
-    width: min(340px, 43vh, 88vw);
-    height: min(340px, 43vh, 88vw);
+    width: min(365px, 48vh, 94vw);
+    height: min(365px, 48vh, 94vw);
     border-radius: 20px;
     box-shadow: 0 18px 42px rgba(49,94,92,.13);
   }
@@ -1064,11 +1134,15 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
   .remotes-panel {
     width: 100%;
     max-width: none;
+    height: auto;
+    min-height: 0;
     margin: 0;
     padding: 18px;
     border-radius: 28px;
   }
 
+  .remotes-carousel { max-height: min(58vh, 520px); }
+  .remotes-track { grid-template-columns: 1fr; }
   .remote-grid { grid-auto-rows: minmax(58px, auto); }
 }
 

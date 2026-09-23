@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=remote-workspace-3">
+  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=remote-grid-6">
 </head>
 <body>
   <main class="kiosk-shell">
@@ -91,17 +91,12 @@
             <header class="remotes-header">
               <div>
                 <small>التحكم بالأجهزة</small>
-                <strong id="remoteTitle">الريموت</strong>
+                <strong id="remoteTitle">أجهزة الشاليه</strong>
               </div>
-              <p class="remote-location" id="remoteLocation"></p>
+              <p class="remote-location" id="remoteLocation">مرّر لاستعراض الأجهزة</p>
             </header>
-            <div class="remotes-carousel" id="remotesCarousel" tabindex="0" role="region" aria-roledescription="carousel" aria-label="الريموتات">
+            <div class="remotes-carousel" id="remotesCarousel" tabindex="0" role="region" aria-label="أجهزة التحكم">
               <div class="remotes-track" id="remotesTrack"></div>
-            </div>
-            <div class="remotes-nav">
-              <button type="button" id="remotePrev" aria-label="الريموت السابق">‹</button>
-              <div class="remote-dots remote-tabs" id="remoteDots" role="tablist" aria-label="اختيار الريموت"></div>
-              <button type="button" id="remoteNext" aria-label="الريموت التالي">›</button>
             </div>
             <p class="remote-feedback" id="remoteFeedback" role="status" aria-live="polite"></p>
           </aside>
@@ -121,14 +116,14 @@
         <p id="activityText">يجهّز لك الرد…</p>
       </div>
 
-      <form class="composer" id="chatForm">
+      <form class="composer" id="chatForm" hidden>
         <label class="sr-only" for="messageInput">اكتب رسالتك</label>
         <textarea id="messageInput" rows="1" maxlength="4000" placeholder="كيف يمكنني خدمتك؟" autocomplete="off" aria-describedby="charCount"></textarea>
         <button id="sendButton" type="submit" aria-label="إرسال الرسالة" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-6-8-2Z"/><path d="m12 14 8-10"/></svg>
         </button>
       </form>
-      <p class="composer-hint"><span id="charCount" aria-live="polite">0 / 4000</span> — اضغط Enter للإرسال، وShift + Enter لسطر جديد</p>
+      <p class="composer-hint" hidden><span id="charCount" aria-live="polite">0 / 4000</span> — اضغط Enter للإرسال، وShift + Enter لسطر جديد</p>
     </section>
   </main>
 
@@ -177,6 +172,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=remote-workspace-3"></script>
+  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=remote-grid-5"></script>
 </body>
 </html>

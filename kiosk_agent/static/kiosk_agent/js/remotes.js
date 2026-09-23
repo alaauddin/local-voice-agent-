@@ -32,32 +32,6 @@ function setRemoteFeedback(message, kind = "") {
   el.remoteFeedback.classList.toggle("is-success", kind === "success");
 }
 
-function updateRemoteChrome() {
-  const remote = state.remotes[state.remoteIndex];
-  if (!remote) return;
-  el.remoteTitle.textContent = remote.name;
-  el.remoteLocation.textContent = remote.location || "";
-  el.remotesTrack.style.transform = `translateX(-${state.remoteIndex * 100}%)`;
-  el.remoteDots.querySelectorAll("button").forEach((dot, index) => {
-    dot.classList.toggle("active", index === state.remoteIndex);
-    dot.setAttribute("aria-selected", String(index === state.remoteIndex));
-    dot.tabIndex = index === state.remoteIndex ? 0 : -1;
-  });
-  el.remoteDots.querySelector("button.active")?.scrollIntoView({
-    behavior: "smooth", block: "nearest", inline: "center",
-  });
-  const atStart = state.remoteIndex <= 0;
-  const atEnd = state.remoteIndex >= state.remotes.length - 1;
-  el.remotePrev.disabled = atStart;
-  el.remoteNext.disabled = atEnd;
-}
-
-function goToRemote(index) {
-  if (!state.remotes.length) return;
-  state.remoteIndex = Math.max(0, Math.min(state.remotes.length - 1, index));
-  updateRemoteChrome();
-}
-
 function buildRemoteGrid(remote) {
   const maxRow = remote.buttons.reduce((max, button) => Math.max(max, button.row), 0);
   const maxCol = remote.buttons.reduce((max, button) => Math.max(max, button.column), 0);
@@ -95,7 +69,6 @@ function buildRemoteGrid(remote) {
 function renderRemotes() {
   if (!el.remotesPanel || !el.voiceStage) return;
   el.remotesTrack.innerHTML = "";
-  el.remoteDots.innerHTML = "";
   if (!state.remotes.length) {
     el.remotesPanel.hidden = true;
     if (el.workspaceTabs) el.workspaceTabs.hidden = true;
@@ -105,22 +78,27 @@ function renderRemotes() {
   el.remotesPanel.hidden = false;
   if (el.workspaceTabs) el.workspaceTabs.hidden = false;
   if (el.remoteCount) el.remoteCount.textContent = String(state.remotes.length);
+  el.remoteTitle.textContent = "أجهزة الشاليه";
+  el.remoteLocation.textContent = `${state.remotes.length} أجهزة متاحة`;
   el.voiceStage.classList.add("has-remotes");
-  state.remotes.forEach((remote, index) => {
-    const slide = document.createElement("div");
+  state.remotes.forEach((remote) => {
+    const slide = document.createElement("article");
     slide.className = "remote-slide";
-    slide.appendChild(buildRemoteGrid(remote));
+    const heading = document.createElement("div");
+    heading.className = "remote-slide-heading";
+    const copy = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = remote.name;
+    const location = document.createElement("small");
+    location.textContent = remote.location || "داخل الشاليه";
+    copy.append(name, location);
+    const configuredCount = remote.buttons.filter((button) => button.configured).length;
+    const count = document.createElement("span");
+    count.textContent = `${configuredCount} أوامر`;
+    heading.append(copy, count);
+    slide.append(heading, buildRemoteGrid(remote));
     el.remotesTrack.appendChild(slide);
-    const dot = document.createElement("button");
-    dot.type = "button";
-    dot.role = "tab";
-    dot.textContent = remote.name;
-    dot.setAttribute("aria-label", remote.name);
-    dot.addEventListener("click", () => goToRemote(index));
-    el.remoteDots.appendChild(dot);
   });
-  if (state.remoteIndex >= state.remotes.length) state.remoteIndex = 0;
-  updateRemoteChrome();
 }
 
 function findRemoteButton(buttonId) {
@@ -183,8 +161,6 @@ async function pressRemoteButton(button, node) {
 
 function bindRemotesUi() {
   if (!el.remotesPanel) return;
-  el.remotePrev.addEventListener("click", () => goToRemote(state.remoteIndex - 1));
-  el.remoteNext.addEventListener("click", () => goToRemote(state.remoteIndex + 1));
   el.workspaceTabs?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-workspace]");
     if (!button) return;
@@ -216,50 +192,6 @@ function bindRemotesUi() {
     handleRemoteButtonClick(button, node);
   });
 
-  let startX = 0;
-  let currentX = 0;
-  let dragging = false;
-  el.remotesCarousel.addEventListener("pointerdown", (event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    // Never capture pointers that start on a remote button — that blocks click.
-    if (event.target.closest(".remote-button, .remotes-nav button, .remote-dots button")) {
-      dragging = false;
-      return;
-    }
-    dragging = true;
-    startX = event.clientX;
-    currentX = startX;
-    el.remotesCarousel.setPointerCapture?.(event.pointerId);
-    el.remotesTrack.classList.add("dragging");
-  });
-  el.remotesCarousel.addEventListener("pointermove", (event) => {
-    if (!dragging) return;
-    currentX = event.clientX;
-    const width = el.remotesCarousel.clientWidth || 1;
-    const offset = ((currentX - startX) / width) * 100;
-    el.remotesTrack.style.transform = `translateX(calc(-${state.remoteIndex * 100}% + ${offset}%))`;
-  });
-  el.remotesCarousel.addEventListener("pointerup", (event) => {
-    if (!dragging) return;
-    dragging = false;
-    el.remotesTrack.classList.remove("dragging");
-    const delta = event.clientX - startX;
-    if (Math.abs(delta) < 40) {
-      updateRemoteChrome();
-      return;
-    }
-    if (delta < 0) goToRemote(state.remoteIndex + 1);
-    else goToRemote(state.remoteIndex - 1);
-  });
-  el.remotesCarousel.addEventListener("pointercancel", () => {
-    dragging = false;
-    el.remotesTrack.classList.remove("dragging");
-    updateRemoteChrome();
-  });
-  el.remotesCarousel.addEventListener("keydown", (event) => {
-    if (event.key === "ArrowLeft") goToRemote(state.remoteIndex - 1);
-    if (event.key === "ArrowRight") goToRemote(state.remoteIndex + 1);
-  });
 }
 
 export { loadRemotes, bindRemotesUi, renderRemotes };

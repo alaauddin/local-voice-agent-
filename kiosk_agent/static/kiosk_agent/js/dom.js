@@ -18,7 +18,6 @@ const el = {
   voiceStage: $("#voiceStage"), workspaceTabs: $("#workspaceTabs"),
   remoteCount: $("#remoteCount"), remotesPanel: $("#remotesPanel"),
   remotesCarousel: $("#remotesCarousel"), remotesTrack: $("#remotesTrack"),
-  remoteDots: $("#remoteDots"), remotePrev: $("#remotePrev"), remoteNext: $("#remoteNext"),
   remoteTitle: $("#remoteTitle"), remoteLocation: $("#remoteLocation"),
   remoteFeedback: $("#remoteFeedback"), remoteConfirmDialog: $("#remoteConfirmDialog"),
   cancelRemoteConfirm: $("#cancelRemoteConfirm"), confirmRemotePress: $("#confirmRemotePress"),
