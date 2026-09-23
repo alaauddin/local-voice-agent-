@@ -8,6 +8,7 @@ import { stopRecognition, scheduleWakeListener } from "./voice.js";
 import { startRealtime } from "./realtime.js";
 
 export const avatarObjectUrls = [];
+const ACTIVE_REQUEST_MAX_AGE_MS = 3 * 60 * 1000;
 
 export function setAvatar(mode, force = false) {
   const videoMode = ["thinking", "speaking"].includes(mode) ? mode : "idle";
@@ -181,7 +182,9 @@ export async function loadMemory() {
     state.persona = data.chalet.persona_name || "غروب";
     state.currentStayId = data.stay_id;
     el.chaletName.textContent = data.chalet.chalet_name || "الشاليه";
-    el.personaIntro.textContent = `مرحباً بك، أنا ${state.persona}، كونسيرجك الرقمي الخاص.`;
+    if (el.personaIntro) {
+      el.personaIntro.textContent = `مرحباً بك، أنا ${state.persona}، كونسيرجك الرقمي الخاص.`;
+    }
     el.mobilePersona.textContent = state.persona;
     if (data.chalet.welcome_message) el.welcomeMessage.textContent = data.chalet.welcome_message;
     state.loadingMemory = true;
@@ -191,11 +194,16 @@ export async function loadMemory() {
       bubble.closest(".message-row").dataset.persisted = "true";
     });
     state.loadingMemory = false;
-    if (data.messages.some((message) => message.role === "user" && ["queued", "streaming"].includes(message.status))) {
+    const now = Date.now();
+    const hasActiveRequest = data.messages.some((message) => (
+      message.role === "user"
+      && ["queued", "streaming"].includes(message.status)
+      && now - Date.parse(message.created_at) < ACTIVE_REQUEST_MAX_AGE_MS
+    ));
+    if (hasActiveRequest) {
       setBusy(true, "جارٍ استكمال طلبك…");
     }
   } catch (error) {
     console.error("Unable to load kiosk memory", error);
   }
 }
-

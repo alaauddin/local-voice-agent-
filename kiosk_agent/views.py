@@ -463,6 +463,7 @@ class RemoteButtonPressView(APIView):
                 "forbidden": status.HTTP_403_FORBIDDEN,
                 "unconfigured": status.HTTP_400_BAD_REQUEST,
                 "invalid_url": status.HTTP_400_BAD_REQUEST,
+                "invalid_command": status.HTTP_400_BAD_REQUEST,
                 "cooldown": status.HTTP_429_TOO_MANY_REQUESTS,
                 "timeout": status.HTTP_504_GATEWAY_TIMEOUT,
                 "network_error": status.HTTP_502_BAD_GATEWAY,
@@ -470,13 +471,14 @@ class RemoteButtonPressView(APIView):
                 "controller_error": status.HTTP_502_BAD_GATEWAY,
             }
             return Response(
-                {"ok": False, "status": exc.code, "detail": exc.message},
+                {"ok": False, "status": exc.code, "detail": exc.message, "execution": "server"},
                 status=status_map.get(exc.code, status.HTTP_400_BAD_REQUEST),
             )
         return Response(
             {
                 "ok": True,
                 "status": "success",
+                "execution": "server",
                 "label": result.get("label"),
                 "target": result.get("target") or "",
             }

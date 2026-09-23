@@ -271,7 +271,7 @@ class RemoteControl(models.Model):
 
     @property
     def configured_count(self) -> int:
-        return self.buttons.filter(is_active=True).exclude(command_url="").count()
+        return sum(button.is_configured for button in self.buttons.filter(is_active=True))
 
     @property
     def active_button_count(self) -> int:
@@ -290,7 +290,24 @@ class RemoteButton(models.Model):
     sort_order = models.PositiveSmallIntegerField(default=0)
     row = models.PositiveSmallIntegerField(default=0)
     column = models.PositiveSmallIntegerField(default=0)
-    command_url = models.CharField(max_length=500, blank=True)
+    command_url = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="IR controller endpoint, for example http://192.168.1.102/ir.",
+    )
+    ir_id = models.PositiveIntegerField(
+        default=1,
+        help_text="Controller/device id sent in the JSON payload.",
+    )
+    frequency = models.PositiveSmallIntegerField(
+        default=38,
+        help_text="IR carrier frequency in kHz.",
+    )
+    raw = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Raw IR pulse timings as a JSON array of positive integers.",
+    )
     is_active = models.BooleanField(default=True)
     requires_confirmation = models.BooleanField(default=False)
 
@@ -309,11 +326,21 @@ class RemoteButton(models.Model):
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.command_url and self.command_url.strip())
+        return bool(self.command_url and self.command_url.strip() and self.raw)
+
+    @property
+    def command_payload(self) -> dict:
+        return {
+            "id": self.ir_id,
+            "frequency": self.frequency,
+            "raw": self.raw,
+        }
 
     def clean(self):
-        from kiosk_agent.remote_control import validate_command_url
+        from kiosk_agent.remote_control import validate_command_url, validate_ir_command
 
         super().clean()
         if self.command_url.strip():
             validate_command_url(self.command_url)
+        if self.raw:
+            validate_ir_command(self.ir_id, self.frequency, self.raw)

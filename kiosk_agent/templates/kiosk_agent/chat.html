@@ -15,53 +15,55 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=sunset-remotes-2">
+  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=remote-workspace-3">
 </head>
 <body>
   <main class="kiosk-shell">
-    <section class="brand-panel" aria-label="معلومات الشاليه">
-      <div class="brand-lockup" aria-label="Sunset Resort منتجع الغروب">
-        <div class="sunset-wordmark" dir="ltr"><span>sun</span><b>S</b><span>et</span></div>
-        <small>Sunset Resort · منتجع الغروب</small>
-      </div>
-      <div class="brand-copy">
-        <p class="eyebrow">رفيقك الذكي لخدمة الشاليه</p>
-        <h1>مساعد غروب<br>الذكي للشاليهات</h1>
-        <p class="property-name" id="chaletName">منتجع الغروب</p>
-        <p id="personaIntro">اطلب ما تحتاجه بصوتك، وغروب في خدمتك.</p>
-      </div>
-      <div class="connection-pill" id="connectionPill" role="status">
-        <span class="connection-dot"></span>
-        <span id="connectionText">جاري الاتصال…</span>
-      </div>
-      <button class="reset-button" id="resetButton" type="button" title="مسح المحادثة عند المغادرة">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M20 20v-6h-6M5.2 15a8 8 0 0 0 13.1 2M18.8 9A8 8 0 0 0 5.7 7"/></svg>
-        إنهاء الإقامة
-      </button>
-      <p class="privacy-note">تُمسح المحادثة بالكامل عند إنهاء الإقامة حفاظاً على خصوصيتك.</p>
-    </section>
-
     <section class="chat-panel" aria-label="محادثة الكونسيرج">
-      <header class="mobile-header">
-        <div>
-          <small>Sunset Resort · منتجع الغروب</small>
-          <strong id="mobilePersona">غروب في خدمتك</strong>
+      <header class="mobile-header app-header">
+        <div class="header-brand" aria-label="Sunset Resort منتجع الغروب">
+          <div class="sunset-wordmark" dir="ltr"><span>sun</span><b>S</b><span>et</span></div>
+          <div class="header-property">
+            <small>Sunset Resort · منتجع الغروب</small>
+            <strong id="chaletName">منتجع الغروب</strong>
+            <span id="mobilePersona" class="sr-only">غروب في خدمتك</span>
+          </div>
         </div>
-        <span class="mobile-status" id="mobileStatus"></span>
+        <div class="header-status">
+          <button class="voice-settings-button" id="voiceSettingsButton" type="button" aria-label="إعدادات الصوت" title="إعدادات الصوت">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+          </button>
+          <button class="messages-toggle" id="messagesToggle" type="button" aria-label="عرض المحادثة" aria-expanded="false" title="عرض المحادثة">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-1-2V7a2 2 0 0 1 2-2Z"/><path d="M8 10h8M8 13h5"/></svg>
+            <span id="messageCount" hidden>0</span>
+          </button>
+          <div class="connection-pill" id="connectionPill" role="status">
+            <span class="connection-dot mobile-status" id="mobileStatus"></span>
+            <span id="connectionText">جاري الاتصال…</span>
+          </div>
+          <button class="reset-button" id="resetButton" type="button" title="إنهاء الإقامة ومسح المحادثة" aria-label="إنهاء الإقامة">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M20 20v-6h-6M5.2 15a8 8 0 0 0 13.1 2M18.8 9A8 8 0 0 0 5.7 7"/></svg>
+            <span>إنهاء الإقامة</span>
+          </button>
+        </div>
       </header>
 
-      <button class="voice-settings-button" id="voiceSettingsButton" type="button" aria-label="إعدادات الصوت" title="إعدادات الصوت">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
-      </button>
-
-      <button class="messages-toggle" id="messagesToggle" type="button" aria-label="عرض المحادثة" aria-expanded="false" title="عرض المحادثة">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-1-2V7a2 2 0 0 1 2-2Z"/><path d="M8 10h8M8 13h5"/></svg>
-        <span id="messageCount" hidden>0</span>
-      </button>
-
       <div class="voice-canvas">
-        <div class="voice-stage" id="voiceStage">
+        <nav class="workspace-tabs" id="workspaceTabs" aria-label="التنقل الرئيسي" hidden>
+          <button class="active" type="button" data-workspace="assistant" aria-pressed="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7v3a7 7 0 0 0 14 0v-3a7 7 0 0 0-7-7Z"/><path d="M9 11h.01M15 11h.01M9.5 15c1.5 1 3.5 1 5 0"/></svg>
+            <span>المساعد</span>
+          </button>
+          <button type="button" data-workspace="remotes" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="4"/><circle cx="12" cy="7" r="1.5"/><path d="M9.5 12h5M12 9.5v5M10 18h.01M14 18h.01"/></svg>
+            <span>التحكم</span>
+            <b id="remoteCount">0</b>
+          </button>
+        </nav>
+
+        <div class="voice-stage" id="voiceStage" data-mobile-view="assistant">
           <div class="welcome" id="welcomeCard">
+            <div class="assistant-label"><span></span> مساعد غروب الذكي</div>
             <div class="avatar-stage" id="avatarStage" data-state="idle">
               <video class="avatar-video active" data-avatar-state="idle" data-src="{% static 'kiosk_agent/videos/idle.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
               <video class="avatar-video" data-avatar-state="thinking" data-src="{% static 'kiosk_agent/videos/thinking.mp4' %}" poster="{% static 'kiosk_agent/videos/poster.svg' %}" muted loop playsinline preload="none"></video>
@@ -98,7 +100,7 @@
             </div>
             <div class="remotes-nav">
               <button type="button" id="remotePrev" aria-label="الريموت السابق">‹</button>
-              <div class="remote-dots" id="remoteDots" role="tablist" aria-label="اختيار الريموت"></div>
+              <div class="remote-dots remote-tabs" id="remoteDots" role="tablist" aria-label="اختيار الريموت"></div>
               <button type="button" id="remoteNext" aria-label="الريموت التالي">›</button>
             </div>
             <p class="remote-feedback" id="remoteFeedback" role="status" aria-live="polite"></p>
@@ -175,6 +177,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=sunset-modules-1"></script>
+  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=remote-workspace-3"></script>
 </body>
 </html>

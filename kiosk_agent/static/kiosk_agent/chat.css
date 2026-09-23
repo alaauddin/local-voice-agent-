@@ -187,15 +187,15 @@ button { cursor: pointer; }
 .remotes-panel {
   width: min(340px, 100%);
   margin: 0 auto;
-  padding: 16px 14px 14px;
+  padding: 20px 18px 16px;
   direction: rtl;
   text-align: right;
   background:
-    linear-gradient(160deg, rgba(255,255,255,.72), rgba(248,242,233,.88)),
-    radial-gradient(circle at 20% 0%, rgba(117,201,193,.18), transparent 55%);
-  border: 1px solid rgba(77,133,128,.22);
-  border-radius: 24px;
-  box-shadow: 0 16px 40px rgba(77,133,128,.12);
+    radial-gradient(circle at 22% 4%, rgba(255,255,255,.06), transparent 32%),
+    linear-gradient(145deg, #333840, #272b31);
+  border: 1px solid rgba(255,255,255,.065);
+  border-radius: 28px;
+  box-shadow: 18px 24px 50px rgba(30,34,39,.28), -10px -10px 28px rgba(255,255,255,.28), inset 1px 1px 0 rgba(255,255,255,.05);
   animation: rise .45s ease-out;
 }
 
@@ -206,25 +206,26 @@ button { cursor: pointer; }
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
-  padding: 0 4px;
+  margin-bottom: 16px;
+  padding: 0 6px;
 }
 
 .remotes-header small {
   display: block;
   color: var(--gold);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .06em;
 }
 
 .remotes-header strong {
-  color: var(--forest);
+  color: #f1f3f5;
   font-size: 15px;
 }
 
 .remote-location {
   margin: 0;
-  color: var(--muted);
+  color: #8f969f;
   font-size: 11px;
   line-height: 1.5;
   max-width: 46%;
@@ -234,7 +235,11 @@ button { cursor: pointer; }
 .remotes-carousel {
   overflow: hidden;
   touch-action: pan-y;
-  border-radius: 18px;
+  padding: 10px;
+  background: linear-gradient(145deg, #24282e, #30353c);
+  border: 1px solid rgba(255,255,255,.035);
+  border-radius: 22px;
+  box-shadow: inset 7px 7px 16px rgba(17,20,24,.48), inset -5px -5px 12px rgba(71,77,86,.18);
   outline: none;
   direction: ltr;
 }
@@ -249,65 +254,105 @@ button { cursor: pointer; }
 .remote-slide {
   flex: 0 0 100%;
   min-width: 100%;
-  padding: 4px;
+  padding: 8px 4px;
   direction: rtl;
 }
 
 .remote-grid {
   display: grid;
-  gap: 8px;
-  grid-auto-rows: minmax(52px, auto);
+  gap: 13px 10px;
+  grid-auto-rows: minmax(62px, auto);
+  align-items: center;
+  justify-items: center;
 }
 
 .remote-button {
   position: relative;
   z-index: 2;
-  min-height: 52px;
-  padding: 10px 8px;
+  width: min(62px, 100%);
+  aspect-ratio: 1;
+  min-height: 58px;
+  padding: 8px 5px;
   display: grid;
   place-content: center;
   gap: 4px;
-  color: var(--forest);
-  background: rgba(255,255,255,.78);
-  border: 1px solid rgba(77,133,128,.22);
-  border-radius: 14px;
-  font-size: 12px;
-  font-weight: 600;
+  color: #d9dde2;
+  background: linear-gradient(145deg, #30353c, #25292f);
+  border: 1px solid rgba(255,255,255,.035);
+  border-radius: 50%;
+  box-shadow: 7px 8px 14px rgba(15,18,22,.58), -4px -4px 10px rgba(67,73,82,.36);
+  font-size: 9px;
+  font-weight: 500;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: transform .15s ease, background .15s ease, border-color .15s ease;
+  transition: transform .14s ease, color .14s ease, box-shadow .14s ease;
 }
 
 .remote-button span.icon {
-  color: var(--gold);
-  font-size: 15px;
+  color: #ffb44f;
+  font: 500 18px/1 Arial, sans-serif;
   line-height: 1;
+  text-shadow: 0 0 12px rgba(255,174,67,.38);
+}
+
+.remote-button-label {
+  max-width: 54px;
+  overflow: hidden;
+  color: #aeb4bc;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-button[data-icon="power"] {
+  color: #272b31;
+  background: linear-gradient(145deg, #ffc96c, #f1a63f);
+  border-color: rgba(255,220,155,.72);
+  box-shadow: 0 0 20px rgba(255,174,67,.26), 7px 8px 14px rgba(15,18,22,.58), inset 1px 1px 0 rgba(255,255,255,.46);
+}
+
+.remote-button[data-icon="power"] span.icon,
+.remote-button[data-icon="power"] .remote-button-label {
+  color: #343239;
+  text-shadow: none;
+}
+
+.remote-button[data-icon="up"],
+.remote-button[data-icon="down"],
+.remote-button[data-icon="left"],
+.remote-button[data-icon="right"] {
+  border-radius: 18px;
 }
 
 .remote-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: rgba(117,201,193,.8);
-  background: #fff;
+  transform: translateY(-2px);
+  color: #fff;
+  box-shadow: 9px 11px 17px rgba(15,18,22,.62), -4px -4px 11px rgba(73,79,88,.4);
+}
+
+.remote-button:active:not(:disabled),
+.remote-button.sending {
+  transform: translateY(1px) scale(.98);
+  box-shadow: inset 4px 4px 9px rgba(14,17,20,.62), inset -3px -3px 7px rgba(70,76,85,.25);
 }
 
 .remote-button:disabled {
-  opacity: .42;
+  opacity: .3;
   cursor: not-allowed;
 }
 
 .remote-button.sending {
-  opacity: .7;
+  opacity: .72;
   pointer-events: none;
 }
 
 .remote-button.success {
-  border-color: rgba(102,199,149,.7);
-  background: rgba(102,199,149,.12);
+  color: #8ee2b2;
+  box-shadow: 0 0 0 2px rgba(102,199,149,.42), 0 0 18px rgba(102,199,149,.22);
 }
 
 .remote-button.error {
-  border-color: rgba(168,94,76,.45);
-  background: rgba(168,94,76,.1);
+  color: #ff9384;
+  box-shadow: 0 0 0 2px rgba(227,118,109,.42), 0 0 18px rgba(227,118,109,.2);
 }
 
 .remotes-nav {
@@ -321,10 +366,11 @@ button { cursor: pointer; }
 .remotes-nav button {
   width: 36px;
   height: 36px;
-  color: var(--forest);
-  background: rgba(255,255,255,.7);
-  border: 1px solid rgba(77,133,128,.18);
-  border-radius: 12px;
+  color: #ffb44f;
+  background: linear-gradient(145deg, #30353c, #25292f);
+  border: 1px solid rgba(255,255,255,.04);
+  border-radius: 50%;
+  box-shadow: 5px 6px 11px rgba(15,18,22,.5), -3px -3px 8px rgba(67,73,82,.3);
   font-size: 22px;
   line-height: 1;
 }
@@ -346,25 +392,26 @@ button { cursor: pointer; }
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: rgba(77,133,128,.28);
+  background: #50565f;
 }
 
 .remote-dots button.active {
-  background: var(--gold);
+  background: #ffb44f;
+  box-shadow: 0 0 10px rgba(255,180,79,.55);
   transform: scale(1.15);
 }
 
 .remote-feedback {
   min-height: 18px;
   margin: 10px 4px 0;
-  color: var(--forest-soft);
+  color: #8f969f;
   font-size: 11px;
   font-weight: 600;
   text-align: center;
 }
 
-.remote-feedback.is-error { color: var(--danger); }
-.remote-feedback.is-success { color: #3d8f6a; }
+.remote-feedback.is-error { color: #ff9384; }
+.remote-feedback.is-success { color: #8ee2b2; }
 
 #remoteConfirmDialog #confirmRemotePress {
   color: #fff;
@@ -545,12 +592,314 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 .setting-toggle input { width: 18px; height: 18px; accent-color: var(--forest); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 
+/* Assistant + device-control workspace */
+.workspace-tabs { display: none; }
+
+.kiosk-shell {
+  width: min(1600px, 100%);
+  grid-template-columns: 1fr;
+}
+
+.app-header {
+  min-height: 78px;
+  padding: 12px clamp(18px, 3vw, 44px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  color: var(--forest);
+  background: rgba(248,245,239,.88);
+  border-bottom: 1px solid rgba(77,133,128,.13);
+  backdrop-filter: blur(16px);
+}
+
+.header-brand,
+.header-status {
+  display: flex;
+  align-items: center;
+}
+
+.header-brand { gap: 16px; }
+.header-status { gap: 9px; }
+
+.app-header .sunset-wordmark {
+  font-size: clamp(27px, 2.4vw, 36px);
+  letter-spacing: -2px;
+}
+
+.header-property {
+  padding-right: 16px;
+  display: grid;
+  gap: 2px;
+  border-right: 1px solid rgba(77,133,128,.16);
+}
+
+.header-property small { color: var(--gold); font-size: 8px; }
+.header-property strong { color: var(--forest); font-size: 11px; }
+
+.app-header .voice-settings-button,
+.app-header .messages-toggle {
+  position: relative;
+  inset: auto;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  background: rgba(255,255,255,.72);
+  border-radius: 13px;
+}
+
+.app-header .connection-pill {
+  margin: 0 4px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.54);
+}
+
+.app-header .reset-button {
+  width: auto;
+  margin: 0;
+  padding: 9px 12px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid rgba(112,91,78,.15);
+  border-radius: 12px;
+  font-size: 10px;
+}
+
+.app-header .reset-button:hover { color: var(--danger); border-color: rgba(168,94,76,.3); }
+.app-header .reset-button svg { width: 17px; }
+
+.chat-panel {
+  background:
+    radial-gradient(circle at 82% 7%, rgba(117, 201, 193, .17), transparent 27%),
+    radial-gradient(circle at 12% 90%, rgba(223, 135, 53, .09), transparent 26%),
+    #f8f5ef;
+}
+
+.voice-canvas {
+  align-items: center;
+  place-items: initial;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(77, 133, 128, .28) transparent;
+}
+
+.voice-stage {
+  width: min(1180px, 100%);
+  margin: auto;
+  padding: clamp(4px, 1vw, 12px);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.voice-stage.has-remotes {
+  grid-template-columns: minmax(440px, 1fr) minmax(330px, 390px);
+  gap: clamp(24px, 4vw, 58px);
+}
+
+.welcome {
+  width: 100%;
+  max-width: 720px;
+  min-width: 0;
+  padding: clamp(6px, 1vw, 14px);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.assistant-label {
+  width: fit-content;
+  margin: 0 auto 14px;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--forest);
+  background: rgba(217, 240, 235, .72);
+  border: 1px solid rgba(77, 133, 128, .14);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.assistant-label span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #66c795;
+  box-shadow: 0 0 0 4px rgba(102, 199, 149, .13);
+}
+
+.voice-stage.has-remotes .avatar-stage,
+.avatar-stage {
+  width: clamp(340px, 48vh, 490px);
+  height: clamp(340px, 48vh, 490px);
+  margin-bottom: -25px;
+  border: 0;
+  border-radius: 24px;
+  background: transparent;
+  box-shadow: 0 24px 60px rgba(49,94,92,.14);
+}
+
+.avatar-glow { display: none; }
+
+.welcome h2,
+.voice-stage.has-remotes .welcome h2 {
+  margin: 20px 0 6px;
+  font-size: clamp(20px, 2.2vw, 29px);
+}
+
+.welcome > p:not(.voice-status):not(.interim-transcript) {
+  max-width: 520px;
+  margin-inline: auto;
+  font-size: 12px;
+}
+
+.suggestions,
+.voice-stage.has-remotes .suggestions {
+  margin-top: 20px;
+  gap: 8px;
+}
+
+.suggestions button {
+  padding: 9px 13px;
+  background: rgba(255,255,255,.76);
+  box-shadow: 0 5px 16px rgba(49,94,92,.05);
+}
+
+.remotes-panel {
+  position: relative;
+  width: 100%;
+  max-width: 370px;
+  padding: 20px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 0, rgba(117,201,193,.15), transparent 30%),
+    linear-gradient(160deg, #273d3c, #172827 72%);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 30px;
+  box-shadow: 0 28px 55px rgba(24,44,42,.25), inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+.remotes-panel::before {
+  content: "";
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  top: -100px;
+  left: -70px;
+  border-radius: 50%;
+  background: rgba(223,135,53,.1);
+  filter: blur(18px);
+  pointer-events: none;
+}
+
+.remotes-header { position: relative; margin-bottom: 14px; }
+.remotes-header small { color: #8edbd2; }
+.remotes-header strong { display: block; margin-top: 4px; font-size: 18px; }
+.remote-location { color: #9fb2af; }
+
+.remotes-carousel {
+  padding: 12px;
+  background: rgba(7, 19, 18, .31);
+  border-color: rgba(255,255,255,.07);
+  border-radius: 24px;
+  box-shadow: inset 0 2px 18px rgba(0,0,0,.22);
+  cursor: grab;
+}
+
+.remotes-carousel:active { cursor: grabbing; }
+.remotes-track { transition: transform .42s cubic-bezier(.22, .72, .2, 1); }
+.remotes-track.dragging { transition: none; }
+.remote-slide { padding: 6px 2px; }
+.remote-grid { gap: 12px 10px; grid-auto-rows: minmax(60px, auto); }
+
+.remote-button {
+  width: min(64px, 100%);
+  min-height: 58px;
+  color: #eef4f3;
+  background: linear-gradient(145deg, rgba(64,88,85,.96), rgba(34,54,52,.96));
+  border-color: rgba(255,255,255,.08);
+  border-radius: 19px;
+  box-shadow: 0 8px 17px rgba(4,14,13,.28), inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+.remote-button span.icon { color: #f8b966; }
+.remote-button-label { color: #c2d0ce; }
+.remote-button[data-icon="power"] { border-radius: 50%; }
+.remote-button:hover:not(:disabled) {
+  transform: translateY(-3px);
+  border-color: rgba(142,219,210,.34);
+  box-shadow: 0 12px 22px rgba(4,14,13,.38), 0 0 0 1px rgba(117,201,193,.13);
+}
+
+.remotes-nav {
+  position: relative;
+  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  margin-top: 14px;
+}
+
+.remotes-nav > button {
+  width: 38px;
+  height: 38px;
+  color: #dff7f3;
+  background: rgba(255,255,255,.07);
+  border-color: rgba(255,255,255,.1);
+  box-shadow: none;
+  transition: transform .18s ease, background .18s ease;
+}
+
+.remotes-nav > button:hover:not(:disabled) { transform: scale(1.06); background: rgba(117,201,193,.18); }
+
+.remote-tabs {
+  min-width: 0;
+  padding: 2px;
+  justify-content: flex-start;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+
+.remote-tabs::-webkit-scrollbar { display: none; }
+.remote-tabs button {
+  width: auto;
+  height: 30px;
+  flex: 0 0 auto;
+  padding: 0 11px;
+  color: #91a9a5;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 9px;
+  white-space: nowrap;
+  transition: color .2s ease, background .2s ease, border-color .2s ease;
+}
+
+.remote-tabs button.active {
+  color: #f8fbfa;
+  background: rgba(117,201,193,.15);
+  border-color: rgba(117,201,193,.24);
+  box-shadow: none;
+  transform: none;
+}
+
+.remote-feedback { color: #a6bbb8; }
+
+.composer {
+  width: min(900px, calc(100% - 48px));
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 12px 35px rgba(38,50,47,.1);
+  backdrop-filter: blur(12px);
+}
+
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
 @keyframes pulse { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 @keyframes micWave { from { opacity: .75; transform: scale(1); } to { opacity: 0; transform: scale(1.65); } }
 @keyframes wakeBreath { 0%, 100% { opacity: .25; transform: scale(1); } 50% { opacity: .75; transform: scale(1.2); } }
 
 @media (max-width: 800px) {
+  html { scrollbar-gutter: auto; }
   body { overflow: hidden; }
   .kiosk-shell { grid-template-columns: 1fr; }
   .brand-panel { display: none; }
@@ -580,6 +929,152 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
   .message-bubble { max-width: 88%; }
   .composer, .activity { width: calc(100% - 28px); }
   .composer-hint { margin-bottom: max(10px, env(safe-area-inset-bottom)); }
+
+  .app-header {
+    min-height: 68px;
+    padding: 9px 12px;
+    gap: 8px;
+  }
+
+  .header-brand { gap: 8px; }
+  .app-header .header-brand,
+  .app-header .header-status { flex-direction: row; }
+  .app-header .header-brand { flex: 0 0 auto; }
+  .app-header .header-status { flex: 0 1 auto; }
+  .app-header .sunset-wordmark {
+    min-width: max-content;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    font-size: 25px;
+  }
+  .header-property { display: none; }
+  .header-status { gap: 6px; }
+  .app-header .connection-pill { width: 10px; height: 10px; margin: 0 2px; padding: 0; border: 0; background: transparent; }
+  .app-header .connection-pill > span:last-child { display: none; }
+  .app-header .connection-dot { width: 9px; height: 9px; }
+  .app-header .voice-settings-button,
+  .app-header .messages-toggle { top: auto; left: auto; width: 38px; height: 38px; flex-basis: 38px; }
+  .app-header .reset-button { width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
+  .app-header .reset-button span { display: none; }
+
+  .voice-canvas {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 12px 6px;
+  }
+
+  .workspace-tabs:not([hidden]) {
+    width: min(360px, 100%);
+    margin: 0 auto 12px;
+    padding: 5px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    flex: 0 0 auto;
+    background: rgba(255,255,255,.7);
+    border: 1px solid rgba(77,133,128,.14);
+    border-radius: 17px;
+    box-shadow: 0 9px 26px rgba(49,94,92,.08);
+    backdrop-filter: blur(12px);
+  }
+
+  .workspace-tabs button {
+    min-height: 42px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted);
+    background: transparent;
+    border: 0;
+    border-radius: 12px;
+    font-size: 11px;
+    transition: color .25s ease, background .25s ease, box-shadow .25s ease, transform .2s ease;
+  }
+
+  .workspace-tabs button svg {
+    width: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .workspace-tabs button b {
+    min-width: 19px;
+    height: 19px;
+    padding: 0 5px;
+    display: grid;
+    place-items: center;
+    color: inherit;
+    background: rgba(77,133,128,.1);
+    border-radius: 999px;
+    font: 700 9px Arial, sans-serif;
+  }
+
+  .workspace-tabs button.active {
+    color: #fff;
+    background: linear-gradient(145deg, #579d97, #356f6b);
+    box-shadow: 0 7px 18px rgba(49,94,92,.2);
+  }
+
+  .voice-stage,
+  .voice-stage.has-remotes {
+    width: min(440px, 100%);
+    margin: 0 auto;
+    padding: 0;
+    display: block;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .voice-stage[data-mobile-view="assistant"] .remotes-panel,
+  .voice-stage[data-mobile-view="remotes"] .welcome { display: none; }
+
+  .voice-stage[data-mobile-view="assistant"] .welcome,
+  .voice-stage[data-mobile-view="remotes"] .remotes-panel {
+    animation: workspaceIn .35s cubic-bezier(.22,.72,.2,1);
+  }
+
+  .welcome {
+    min-height: 100%;
+    margin: 0;
+    padding: 16px 16px 20px;
+  }
+
+  .assistant-label { margin-bottom: 10px; }
+  .voice-stage.has-remotes .avatar-stage,
+  .avatar-stage {
+    width: min(340px, 43vh, 88vw);
+    height: min(340px, 43vh, 88vw);
+    border-radius: 20px;
+    box-shadow: 0 18px 42px rgba(49,94,92,.13);
+  }
+  .welcome h2, .voice-stage.has-remotes .welcome h2 { margin-top: 17px; font-size: clamp(19px, 5.5vw, 25px); }
+  .welcome > p:not(.voice-status):not(.interim-transcript) { font-size: 11px; }
+  .suggestions, .voice-stage.has-remotes .suggestions { margin-top: 16px; }
+  .suggestions button { padding: 8px 11px; font-size: 10px; }
+
+  .remotes-panel {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 18px;
+    border-radius: 28px;
+  }
+
+  .remote-grid { grid-auto-rows: minmax(58px, auto); }
+}
+
+@keyframes workspaceIn {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {

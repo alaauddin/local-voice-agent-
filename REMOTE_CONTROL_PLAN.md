@@ -2,7 +2,7 @@
 
 ## Goal
 
-Let an administrator create a remote for a LAN controlled device, arrange its buttons, and assign one HTTP GET command URL to each button. Reusable templates provide button names and layout so a new remote only needs its device specific URLs.
+Let an administrator create a remote for a LAN controlled device, arrange its buttons, and assign one HTTP POST IR command to each button. Reusable templates provide button names and layout so a new remote only needs its device-specific endpoint and IR data.
 
 Example command: `http://192.168.1.8/api/send?id=ESP01_01&code=85649F80`. The stored URL uses ordinary `&`; the backslash in the example's Markdown link is only link escaping.
 
@@ -13,7 +13,7 @@ Example command: `http://192.168.1.8/api/send?id=ESP01_01&code=85649F80`. The st
 | `RemoteTemplate` | `name`, `slug`, `category` (AC, fan, lights, other), `description`, `is_active` | Unique `slug`. A template describes buttons and contains no device URLs. |
 | `RemoteTemplateButton` | `template` FK, `key`, `label`, `icon`, `sort_order`, `row`, `column`, `requires_confirmation` | Unique `(template, key)` and `(template, row, column)`. `key` is a stable name such as `power_on`. |
 | `RemoteControl` | `name`, `slug`, `location`, `template` nullable FK, `is_active`, `sort_order`, `created_at`, `updated_at` | Unique `slug`. The template FK records where it came from; later template edits do not change existing remotes. |
-| `RemoteButton` | `remote` FK, `key`, `label`, `icon`, `sort_order`, `row`, `column`, `command_url`, `is_active`, `requires_confirmation` | Unique `(remote, key)` and `(remote, row, column)`. A button has exactly one GET command. Empty `command_url` means unconfigured and cannot be pressed. |
+| `RemoteButton` | `remote` FK, `key`, `label`, `icon`, `sort_order`, `row`, `column`, `command_url`, `ir_id`, `frequency`, `raw`, `is_active`, `requires_confirmation` | Unique `(remote, key)` and `(remote, row, column)`. A button is pressable only when its endpoint and raw IR timings are configured. |
 | `RemoteCommandLog` | `remote` FK, `button` nullable FK, `stay_id` nullable, `source` (admin, kiosk, voice), `status`, `http_status` nullable, `duration_ms`, `created_at` | Records attempts and outcomes without storing full URLs or command codes. Keep errors short and scrubbed. |
 
 Use `PROTECT` for template deletion while referenced by remotes, and for remote/button deletion while referenced by command logs, or use soft deletion via `is_active`. This preserves audit history. If the log is intentionally short lived, a retention job can delete old log rows first.
@@ -30,7 +30,8 @@ Template example: `Fan` with `Power On`, `Power Off`, `Speed +`, and `Speed -`. 
 
 ## Command execution
 
-- The browser or voice agent sends only a `RemoteButton` ID to Django. Django looks up the active button and reads its stored URL. Never accept a URL or command code from a guest request or an AI tool argument.
+- A guest press request sends only a `RemoteButton` ID to Django. Django loads and executes the stored command from the backend. Never expose or accept a URL or command code in a guest request or AI tool argument.
+- Send only the constrained JSON keys `id`, `frequency`, and `raw` to the controller; never accept arbitrary headers, scripts, or guest-provided command data.
 - Validate URLs when saved and immediately before sending: `http` only for the current LAN controller, allowed host/IP list in settings, expected path `/api/send`, no credentials or fragments, and bounded URL length. Start with an explicit allowlist containing `192.168.1.8`, configurable for later controllers. This prevents the feature becoming a general URL fetcher.
 - Send one server side GET with a short connect/read timeout and no redirects. Do not automatically retry a command: a timeout may occur after the device has already acted. Mark non 2xx responses and network failures as failed.
 - Check access before executing. Admin testing requires the appropriate Django model permission. Any kiosk endpoint uses the existing kiosk access mechanism and a CSRF protected POST. Add a per button cooldown and rate limit to avoid repeated presses. Keep sensitive devices such as pool stair lights manual only until voice use is explicitly enabled per remote.

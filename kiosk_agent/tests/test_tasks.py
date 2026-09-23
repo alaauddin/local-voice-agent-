@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import AsyncMock, patch
 
+from celery.exceptions import Retry
 from django.test import TestCase, override_settings
 
 from kiosk_agent.models import ChaletConfig, KioskMessage
@@ -11,6 +12,13 @@ IN_MEMORY_CHANNELS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLay
 
 @override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNELS)
 class ConciergeTaskTests(TestCase):
+    def test_missing_request_is_retried_instead_of_silently_ignored(self):
+        with patch.object(run_concierge_task, "retry", side_effect=Retry()) as retry:
+            with self.assertRaises(Retry):
+                run_concierge_task.run(str(uuid.uuid4()), str(uuid.uuid4()))
+
+        retry.assert_called_once_with(countdown=1)
+
     @patch("kiosk_agent.tasks.publish", new_callable=AsyncMock)
     @patch("kiosk_agent.tasks.run_agent", new_callable=AsyncMock)
     def test_agent_failure_marks_streaming_request_failed(self, run_agent, publish):

@@ -63,16 +63,29 @@ def welcome_tts_task(stay_id: str, request_id: str) -> None:
         close_old_connections()
 
 
-@shared_task(bind=True, autoretry_for=(), max_retries=0, name="kiosk_agent.run_concierge")
+@shared_task(bind=True, autoretry_for=(), max_retries=3, name="kiosk_agent.run_concierge")
 def run_concierge_task(self, stay_id: str, request_id: str) -> None:
     close_old_connections()
+    request = KioskMessage.objects.filter(
+        stay_id=stay_id,
+        request_id=request_id,
+        role=KioskMessage.Role.USER,
+    )
+    status = request.values_list("status", flat=True).first()
+    if status is None:
+        logger.warning(
+            "Request %s is not visible to the worker yet; retrying",
+            request_id,
+        )
+        close_old_connections()
+        raise self.retry(countdown=1)
+    if status != KioskMessage.Status.QUEUED:
+        close_old_connections()
+        return
     try:
-        claimed = KioskMessage.objects.filter(
-            stay_id=stay_id,
-            request_id=request_id,
-            role=KioskMessage.Role.USER,
-            status=KioskMessage.Status.QUEUED,
-        ).update(status=KioskMessage.Status.STREAMING)
+        claimed = request.filter(status=KioskMessage.Status.QUEUED).update(
+            status=KioskMessage.Status.STREAMING
+        )
         if not claimed:
             return
         KioskAuditLog.objects.create(

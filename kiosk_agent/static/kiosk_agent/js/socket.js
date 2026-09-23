@@ -6,7 +6,7 @@ import { apiKey, realtimeEnabled } from "./config.js";
 import {
   createMessage, streamFor, setBusy, scrollBottom, setConnection, scheduleAutoRealtime,
 } from "./ui.js";
-import { resetAudio, receiveChunk } from "./tts.js";
+import { resetAudio, receiveChunk, finishAudio } from "./tts.js";
 import { closeRealtime } from "./realtime.js";
 import { finishTurn } from "./conversation.js";
 
@@ -62,13 +62,9 @@ export function handleEvent(event) {
     case "tts_fallback":
       resetAudio(event.nonce, 1);
       receiveChunk({ ...event, seq: 0, total: 1, fallbackText: event.text });
-      state.ttsEnded = true;
-      playNext();
+      finishAudio({ ...event, total: 1 });
       break;
-    case "tts_end":
-      state.ttsEnded = true;
-      playNext();
-      break;
+    case "tts_end": finishAudio(event); break;
     case "busy": setBusy(true, event.message || "يوجد طلب قيد التنفيذ…"); break;
     case "message_persisted": {
       if (event.stay_id && state.currentStayId && event.stay_id !== state.currentStayId) break;
@@ -113,4 +109,3 @@ export function restartSocket() {
   if (state.socket) state.socket.close();
   window.setTimeout(() => { state.shouldReconnect = true; connect(); }, 150);
 }
-

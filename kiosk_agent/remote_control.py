@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_SCHEMES = {"http", "https"}
 MAX_URL_LENGTH = 500
+MAX_RAW_LENGTH = 4096
 COOLDOWN_KEY = "wazen:remote:cooldown:{button_id}"
 
 
@@ -41,6 +42,21 @@ def validate_command_url(url: str) -> str:
     if not parsed.netloc:
         raise ValidationError("Command URL must include a host.")
     return raw
+
+
+def validate_ir_command(ir_id, frequency, raw) -> dict:
+    """Validate and normalize the controller's dynamic JSON command."""
+    if isinstance(ir_id, bool) or not isinstance(ir_id, int) or ir_id < 0:
+        raise ValidationError("IR id must be a non-negative integer.")
+    if isinstance(frequency, bool) or not isinstance(frequency, int) or not 1 <= frequency <= 1000:
+        raise ValidationError("Frequency must be an integer between 1 and 1000 kHz.")
+    if not isinstance(raw, list) or not raw:
+        raise ValidationError("Raw IR data must be a non-empty JSON array.")
+    if len(raw) > MAX_RAW_LENGTH:
+        raise ValidationError(f"Raw IR data cannot exceed {MAX_RAW_LENGTH} timings.")
+    if any(isinstance(value, bool) or not isinstance(value, int) or value <= 0 for value in raw):
+        raise ValidationError("Every raw IR timing must be a positive integer.")
+    return {"id": ir_id, "frequency": frequency, "raw": raw}
 
 
 def _cooldown_seconds() -> float:
@@ -102,16 +118,7 @@ def _audit(
         logger.warning("Failed to write remote audit log: %s", exc)
 
 
-def press_remote_button(
-    button_id: int,
-    *,
-    source: str,
-    stay_id=None,
-    request_id=None,
-    require_guest_visible: bool = False,
-) -> dict:
-    """Execute a configured remote button via server-side GET. Never accepts a URL from the client."""
-    close_old_connections()
+def _load_pressable_button(button_id: int, *, require_guest_visible: bool) -> RemoteButton:
     try:
         button = (
             RemoteButton.objects.select_related("remote")
@@ -125,12 +132,29 @@ def press_remote_button(
         raise RemoteCommandError("forbidden", "Remote is not available on the kiosk.")
 
     if not button.is_configured:
-        raise RemoteCommandError("unconfigured", "Button has no command URL.")
+        raise RemoteCommandError("unconfigured", "Button has no complete IR command.")
 
     try:
-        url = validate_command_url(button.command_url)
+        validate_command_url(button.command_url)
+        validate_ir_command(button.ir_id, button.frequency, button.raw)
     except ValidationError as exc:
-        raise RemoteCommandError("invalid_url", "; ".join(exc.messages)) from exc
+        raise RemoteCommandError("invalid_command", "; ".join(exc.messages)) from exc
+    return button
+
+
+def press_remote_button(
+    button_id: int,
+    *,
+    source: str,
+    stay_id=None,
+    request_id=None,
+    require_guest_visible: bool = False,
+) -> dict:
+    """POST a stored IR command server-side. Command data never comes from the guest request."""
+    close_old_connections()
+    button = _load_pressable_button(button_id, require_guest_visible=require_guest_visible)
+    url = validate_command_url(button.command_url)
+    payload = validate_ir_command(button.ir_id, button.frequency, button.raw)
 
     _check_cooldown(button.pk)
 
@@ -148,7 +172,7 @@ def press_remote_button(
             timeout=httpx.Timeout(timeout, connect=min(1.5, timeout)),
             follow_redirects=False,
         ) as client:
-            response = client.get(url)
+            response = client.post(url, json=payload)
         http_status = response.status_code
         duration_ms = int((time.monotonic() - started) * 1000)
         if not (200 <= response.status_code < 300):
@@ -162,6 +186,7 @@ def press_remote_button(
                     "button_id": button.pk,
                     "button_key": button.key,
                     "source": source,
+                    "execution": "server",
                     "status": error_code,
                     "http_status": http_status,
                     "duration_ms": duration_ms,
@@ -188,6 +213,7 @@ def press_remote_button(
                     "button_id": button.pk,
                     "button_key": button.key,
                     "source": source,
+                    "execution": "server",
                     "status": error_code,
                     "controller_status": controller_status,
                     "http_status": http_status,
@@ -208,6 +234,7 @@ def press_remote_button(
                 "button_id": button.pk,
                 "button_key": button.key,
                 "source": source,
+                "execution": "server",
                 "status": "success",
                 "http_status": http_status,
                 "duration_ms": duration_ms,
@@ -217,6 +244,7 @@ def press_remote_button(
         return {
             "ok": True,
             "status": "success",
+            "execution": "server",
             "remote_id": button.remote_id,
             "button_id": button.pk,
             "label": button.label,
@@ -237,6 +265,7 @@ def press_remote_button(
                 "button_id": button.pk,
                 "button_key": button.key,
                 "source": source,
+                "execution": "server",
                 "status": "timeout",
                 "http_status": None,
                 "duration_ms": duration_ms,
@@ -254,6 +283,7 @@ def press_remote_button(
                 "button_id": button.pk,
                 "button_key": button.key,
                 "source": source,
+                "execution": "server",
                 "status": "network_error",
                 "http_status": None,
                 "duration_ms": duration_ms,

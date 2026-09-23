@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
@@ -18,7 +19,12 @@ from .models import (
     RemoteTemplateButton,
     StaffRequest,
 )
-from .remote_control import RemoteCommandError, press_remote_button, validate_command_url
+from .remote_control import (
+    RemoteCommandError,
+    press_remote_button,
+    validate_command_url,
+    validate_ir_command,
+)
 
 
 @admin.register(ChaletConfig)
@@ -136,6 +142,20 @@ class RemoteButtonForm(forms.ModelForm):
             validate_command_url(value)
         return value
 
+    def clean(self):
+        cleaned_data = super().clean()
+        raw = cleaned_data.get("raw")
+        if raw:
+            try:
+                validate_ir_command(
+                    cleaned_data.get("ir_id"),
+                    cleaned_data.get("frequency"),
+                    raw,
+                )
+            except ValidationError as exc:
+                self.add_error("raw", exc)
+        return cleaned_data
+
 
 class RemoteButtonInline(admin.TabularInline):
     model = RemoteButton
@@ -149,6 +169,9 @@ class RemoteButtonInline(admin.TabularInline):
         "column",
         "sort_order",
         "command_url",
+        "ir_id",
+        "frequency",
+        "raw",
         "is_active",
         "requires_confirmation",
         "test_link",
@@ -253,7 +276,7 @@ class RemoteControlAdmin(admin.ModelAdmin):
                         ])
                     self.message_user(
                         request,
-                        f"Created remote “{remote.name}” with {remote.buttons.count()} buttons. Add command URLs next.",
+                        f"Created remote “{remote.name}” with {remote.buttons.count()} buttons. Add IR commands next.",
                         messages.SUCCESS,
                     )
                     return HttpResponseRedirect(

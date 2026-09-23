@@ -9,8 +9,16 @@ const REMOTE_ICONS = {
   plus: "＋",
   minus: "−",
   mode: "⟳",
-  fan: "✧",
+  fan: "≋",
   light: "✦",
+  up: "⌃",
+  down: "⌄",
+  left: "‹",
+  right: "›",
+  play: "▶",
+  pause: "Ⅱ",
+  menu: "MENU",
+  volume: "◖",
 };
 
 function remoteIcon(name) {
@@ -32,6 +40,11 @@ function updateRemoteChrome() {
   el.remotesTrack.style.transform = `translateX(-${state.remoteIndex * 100}%)`;
   el.remoteDots.querySelectorAll("button").forEach((dot, index) => {
     dot.classList.toggle("active", index === state.remoteIndex);
+    dot.setAttribute("aria-selected", String(index === state.remoteIndex));
+    dot.tabIndex = index === state.remoteIndex ? 0 : -1;
+  });
+  el.remoteDots.querySelector("button.active")?.scrollIntoView({
+    behavior: "smooth", block: "nearest", inline: "center",
   });
   const atStart = state.remoteIndex <= 0;
   const atEnd = state.remoteIndex >= state.remotes.length - 1;
@@ -61,9 +74,19 @@ function buildRemoteGrid(remote) {
       node.style.gridRow = String(button.row + 1);
       node.style.gridColumn = String(button.column + 1);
       node.dataset.buttonId = String(button.id);
+      node.dataset.key = button.key;
+      node.dataset.icon = button.icon || "";
       node.disabled = !button.configured;
       node.title = button.configured ? button.label : "غير مهيأ بعد";
-      node.innerHTML = `<span class="icon">${remoteIcon(button.icon)}</span><span>${button.label}</span>`;
+      node.setAttribute("aria-label", button.label);
+      const icon = document.createElement("span");
+      icon.className = "icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = remoteIcon(button.icon);
+      const label = document.createElement("span");
+      label.className = "remote-button-label";
+      label.textContent = button.label;
+      node.append(icon, label);
       grid.appendChild(node);
     });
   return grid;
@@ -75,10 +98,13 @@ function renderRemotes() {
   el.remoteDots.innerHTML = "";
   if (!state.remotes.length) {
     el.remotesPanel.hidden = true;
+    if (el.workspaceTabs) el.workspaceTabs.hidden = true;
     el.voiceStage.classList.remove("has-remotes");
     return;
   }
   el.remotesPanel.hidden = false;
+  if (el.workspaceTabs) el.workspaceTabs.hidden = false;
+  if (el.remoteCount) el.remoteCount.textContent = String(state.remotes.length);
   el.voiceStage.classList.add("has-remotes");
   state.remotes.forEach((remote, index) => {
     const slide = document.createElement("div");
@@ -87,6 +113,8 @@ function renderRemotes() {
     el.remotesTrack.appendChild(slide);
     const dot = document.createElement("button");
     dot.type = "button";
+    dot.role = "tab";
+    dot.textContent = remote.name;
     dot.setAttribute("aria-label", remote.name);
     dot.addEventListener("click", () => goToRemote(index));
     el.remoteDots.appendChild(dot);
@@ -134,6 +162,7 @@ async function pressRemoteButton(button, node) {
   if (state.remotePressing) return;
   state.remotePressing = true;
   node.classList.add("sending");
+  node.setAttribute("aria-busy", "true");
   node.classList.remove("success", "error");
   setRemoteFeedback("جاري الإرسال…");
   try {
@@ -147,6 +176,7 @@ async function pressRemoteButton(button, node) {
     window.setTimeout(() => node.classList.remove("error"), 1400);
   } finally {
     node.classList.remove("sending");
+    node.removeAttribute("aria-busy");
     state.remotePressing = false;
   }
 }
@@ -155,6 +185,17 @@ function bindRemotesUi() {
   if (!el.remotesPanel) return;
   el.remotePrev.addEventListener("click", () => goToRemote(state.remoteIndex - 1));
   el.remoteNext.addEventListener("click", () => goToRemote(state.remoteIndex + 1));
+  el.workspaceTabs?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-workspace]");
+    if (!button) return;
+    const view = button.dataset.workspace;
+    el.voiceStage.dataset.mobileView = view;
+    el.workspaceTabs.querySelectorAll("button").forEach((item) => {
+      const active = item === button;
+      item.classList.toggle("active", active);
+      item.setAttribute("aria-pressed", String(active));
+    });
+  });
   el.cancelRemoteConfirm.addEventListener("click", () => {
     state.pendingRemoteButton = null;
     el.remoteConfirmDialog.close();
@@ -176,6 +217,7 @@ function bindRemotesUi() {
   });
 
   let startX = 0;
+  let currentX = 0;
   let dragging = false;
   el.remotesCarousel.addEventListener("pointerdown", (event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -186,17 +228,33 @@ function bindRemotesUi() {
     }
     dragging = true;
     startX = event.clientX;
+    currentX = startX;
+    el.remotesCarousel.setPointerCapture?.(event.pointerId);
+    el.remotesTrack.classList.add("dragging");
+  });
+  el.remotesCarousel.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    currentX = event.clientX;
+    const width = el.remotesCarousel.clientWidth || 1;
+    const offset = ((currentX - startX) / width) * 100;
+    el.remotesTrack.style.transform = `translateX(calc(-${state.remoteIndex * 100}% + ${offset}%))`;
   });
   el.remotesCarousel.addEventListener("pointerup", (event) => {
     if (!dragging) return;
     dragging = false;
+    el.remotesTrack.classList.remove("dragging");
     const delta = event.clientX - startX;
-    if (Math.abs(delta) < 40) return;
+    if (Math.abs(delta) < 40) {
+      updateRemoteChrome();
+      return;
+    }
     if (delta < 0) goToRemote(state.remoteIndex + 1);
     else goToRemote(state.remoteIndex - 1);
   });
   el.remotesCarousel.addEventListener("pointercancel", () => {
     dragging = false;
+    el.remotesTrack.classList.remove("dragging");
+    updateRemoteChrome();
   });
   el.remotesCarousel.addEventListener("keydown", (event) => {
     if (event.key === "ArrowLeft") goToRemote(state.remoteIndex - 1);

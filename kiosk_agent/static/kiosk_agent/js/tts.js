@@ -30,6 +30,13 @@ export function receiveChunk(event) {
   playNext();
 }
 
+export function finishAudio(event) {
+  if (state.activeNonce && event.nonce !== state.activeNonce) return;
+  state.totalSeq = event.total || state.totalSeq;
+  state.ttsEnded = true;
+  playNext();
+}
+
 export function playNext() {
   if (state.audioPlaying) return;
   const chunk = state.audioBuffer.get(state.nextSeq);
@@ -94,4 +101,3 @@ export function stopAudio() {
   state.audioPlaying = false;
   state.audioBuffer.clear();
 }
-

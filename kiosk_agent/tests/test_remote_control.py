@@ -13,7 +13,14 @@ from kiosk_agent.models import (
     RemoteTemplate,
     RemoteTemplateButton,
 )
-from kiosk_agent.remote_control import press_remote_button, validate_command_url
+from kiosk_agent.remote_control import (
+    press_remote_button,
+    validate_command_url,
+    validate_ir_command,
+)
+
+
+SAMPLE_RAW = [8980, 4470, 530, 620, 530, 570, 580]
 
 
 @override_settings(
@@ -55,29 +62,78 @@ class RemoteControlTests(TestCase):
             row=0,
             column=0,
             sort_order=0,
-            command_url="http://192.168.1.2/api/ir?id-ir=1&hex=000001F2",
+            command_url="http://192.168.1.102/ir",
+            ir_id=1,
+            frequency=38,
+            raw=SAMPLE_RAW,
         )
 
     def test_validate_command_url_accepts_any_http_url(self):
         validate_command_url("http://192.168.1.2/api/ir?id-ir=1&hex=000001F2")
         validate_command_url("https://example.com/anything")
-        validate_command_url("http://192.168.1.8/api/send?id=ESP01_01&code=1")
         with self.assertRaises(ValidationError):
             validate_command_url("ftp://192.168.1.2/x")
         with self.assertRaises(ValidationError):
-            validate_command_url("not-a-url")
-        with self.assertRaises(ValidationError):
             validate_command_url("")
 
-    def test_remotes_list_hides_urls(self):
+    def test_validate_ir_command_rejects_invalid_timings(self):
+        self.assertEqual(
+            validate_ir_command(1, 38, SAMPLE_RAW),
+            {"id": 1, "frequency": 38, "raw": SAMPLE_RAW},
+        )
+        with self.assertRaises(ValidationError):
+            validate_ir_command(1, 38, [])
+        with self.assertRaises(ValidationError):
+            validate_ir_command(1, 38, [8980, -1])
+
+    def test_remotes_list_does_not_expose_ir_command(self):
         response = self.client.get(reverse("kiosk_agent:remotes"))
         self.assertEqual(response.status_code, 200)
-        remotes = response.json()["remotes"]
-        self.assertEqual(len(remotes), 1)
-        button = remotes[0]["buttons"][0]
+        payload = response.json()
+        button = payload["remotes"][0]["buttons"][0]
         self.assertTrue(button["configured"])
         self.assertNotIn("command_url", button)
-        self.assertNotIn("85649F80", str(response.json()))
+        self.assertNotIn("command_payload", button)
+        self.assertNotIn("192.168.1.102", str(payload))
+        self.assertNotIn("8980", str(payload))
+
+    @patch("kiosk_agent.remote_control.httpx.Client")
+    def test_kiosk_press_posts_stored_command_from_backend(self, client_cls):
+        controller_response = type("Resp", (), {})()
+        controller_response.status_code = 200
+        controller_response.json = lambda: {
+            "status": "success",
+            "target": "ESP01_01",
+            "httpCode": 200,
+        }
+        client = client_cls.return_value.__enter__.return_value
+        client.post.return_value = controller_response
+
+        response = self.client.post(
+            reverse("kiosk_agent:remote-button-press", args=[self.button.pk]),
+            {
+                "command_url": "http://attacker.invalid/ir",
+                "id": 999,
+                "frequency": 1,
+                "raw": [1],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(response.json()["execution"], "server")
+        self.assertFalse(client_cls.call_args.kwargs.get("follow_redirects", True))
+        client.post.assert_called_once_with(
+            "http://192.168.1.102/ir",
+            json={"id": 1, "frequency": 38, "raw": SAMPLE_RAW},
+        )
+        self.assertTrue(
+            KioskAuditLog.objects.filter(event=KioskAuditLog.Event.REMOTE_PRESSED).exists()
+        )
+        audit = KioskAuditLog.objects.get(event=KioskAuditLog.Event.REMOTE_PRESSED)
+        self.assertEqual(audit.details.get("execution"), "server")
+        self.assertNotIn("8980", str(audit.details))
 
     def test_press_unconfigured_button(self):
         self.button.command_url = ""
@@ -89,48 +145,6 @@ class RemoteControlTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["status"], "unconfigured")
-
-    @patch("kiosk_agent.remote_control.httpx.Client")
-    def test_press_success_parses_controller_payload(self, client_cls):
-        response = type("Resp", (), {})()
-        response.status_code = 200
-        response.json = lambda: {
-            "status": "success",
-            "target": "ESP01_01",
-            "ip": "192.168.1.9",
-            "httpCode": 200,
-            "response": '{"status":"success","id":"ESP01_01","code":"85649F80"}',
-        }
-        client = client_cls.return_value.__enter__.return_value
-        client.get.return_value = response
-
-        api = self.client.post(
-            reverse("kiosk_agent:remote-button-press", args=[self.button.pk]),
-            {},
-            format="json",
-        )
-        self.assertEqual(api.status_code, 200)
-        self.assertTrue(api.json()["ok"])
-        self.assertEqual(api.json()["target"], "ESP01_01")
-        client.get.assert_called_once()
-        called_url = client.get.call_args.args[0]
-        self.assertTrue(called_url.startswith("http://192.168.1.2/api/ir"))
-        self.assertTrue(
-            KioskAuditLog.objects.filter(event=KioskAuditLog.Event.REMOTE_PRESSED).exists()
-        )
-        audit = KioskAuditLog.objects.get(event=KioskAuditLog.Event.REMOTE_PRESSED)
-        self.assertNotIn("85649F80", str(audit.details))
-        self.assertNotIn("command_url", audit.details)
-
-    @patch("kiosk_agent.remote_control.httpx.Client")
-    def test_press_does_not_follow_redirects(self, client_cls):
-        response = type("Resp", (), {})()
-        response.status_code = 200
-        response.json = lambda: {"status": "success", "httpCode": 200}
-        client_cls.return_value.__enter__.return_value.get.return_value = response
-        press_remote_button(self.button.pk, source="admin")
-        kwargs = client_cls.call_args.kwargs
-        self.assertFalse(kwargs.get("follow_redirects", True))
 
     def test_copy_from_template_creates_blank_urls(self):
         from django.contrib.auth import get_user_model
@@ -152,8 +166,18 @@ class RemoteControlTests(TestCase):
         button = remote.buttons.get()
         self.assertEqual(button.label, "Power On")
         self.assertEqual(button.command_url, "")
+        self.assertEqual(button.raw, [])
 
     def test_seeded_templates_exist(self):
         self.assertTrue(RemoteTemplate.objects.filter(slug="fan").exists())
         self.assertTrue(RemoteTemplate.objects.filter(slug="ac").exists())
         self.assertTrue(RemoteTemplate.objects.filter(slug="lights").exists())
+
+    @patch("kiosk_agent.remote_control.httpx.Client")
+    def test_admin_helper_still_server_side(self, client_cls):
+        response = type("Resp", (), {})()
+        response.status_code = 200
+        response.json = lambda: {"status": "success"}
+        client_cls.return_value.__enter__.return_value.post.return_value = response
+        press_remote_button(self.button.pk, source="admin")
+        client_cls.assert_called_once()
