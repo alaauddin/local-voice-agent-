@@ -5,9 +5,11 @@ from django.db import transaction
 from django.http import HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.text import slugify
 
+from .device_discovery import DeviceDiscoveryError, discover_identity_devices
 from .models import (
     ChaletConfig,
     KioskAuditLog,
@@ -174,9 +176,14 @@ class RemoteButtonInline(admin.TabularInline):
         "raw",
         "is_active",
         "requires_confirmation",
+        "resolved_endpoint",
         "test_link",
     )
-    readonly_fields = ("test_link",)
+    readonly_fields = ("resolved_endpoint", "test_link")
+
+    @admin.display(description="Resolved endpoint")
+    def resolved_endpoint(self, obj):
+        return obj.target_command_url if obj.pk else "—"
 
     @admin.display(description="Test")
     def test_link(self, obj):
@@ -194,6 +201,11 @@ class AddRemoteFromTemplateForm(forms.Form):
     name = forms.CharField(max_length=120)
     slug = forms.SlugField(max_length=120, required=False)
     location = forms.CharField(max_length=120, required=False)
+    device_name = forms.CharField(
+        max_length=120,
+        required=False,
+        help_text="Exact DEVICE_NAME configured on the ESP32.",
+    )
     guest_visible = forms.BooleanField(required=False, initial=True)
     voice_enabled = forms.BooleanField(required=False, initial=False)
 
@@ -204,6 +216,8 @@ class RemoteControlAdmin(admin.ModelAdmin):
         "name",
         "slug",
         "location",
+        "device_name",
+        "device_ip",
         "configured_badge",
         "is_active",
         "guest_visible",
@@ -212,17 +226,82 @@ class RemoteControlAdmin(admin.ModelAdmin):
         "updated_at",
     )
     list_filter = ("is_active", "guest_visible", "voice_enabled")
-    search_fields = ("name", "slug", "location")
+    search_fields = ("name", "slug", "location", "device_name", "device_ip")
     prepopulated_fields = {"slug": ("name",)}
-    readonly_fields = ("template", "template_slug", "created_at", "updated_at")
+    readonly_fields = (
+        "template",
+        "template_slug",
+        "device_ip",
+        "device_last_seen_at",
+        "created_at",
+        "updated_at",
+    )
     inlines = (RemoteButtonInline,)
     change_list_template = "admin/kiosk_agent/remotecontrol/change_list.html"
+    actions = ("sync_device_ips",)
 
     @admin.display(description="Configured")
     def configured_badge(self, obj):
         total = obj.active_button_count
         done = obj.configured_count
         return f"{done}/{total}"
+
+    @admin.action(description="Sync selected device IPs by DEVICE_NAME")
+    def sync_device_ips(self, request, queryset):
+        try:
+            devices = discover_identity_devices()
+        except DeviceDiscoveryError as exc:
+            self.message_user(request, str(exc), level=messages.ERROR)
+            return
+
+        devices_by_name = {}
+        for device in devices:
+            key = device["name"].strip().casefold()
+            devices_by_name.setdefault(key, []).append(device)
+
+        synced = 0
+        missing = []
+        ambiguous = []
+        now = timezone.now()
+
+        with transaction.atomic():
+            for remote in queryset:
+                key = remote.device_name.strip().casefold()
+                if not key:
+                    missing.append(f"{remote.name} (DEVICE_NAME is blank)")
+                    continue
+
+                matches = devices_by_name.get(key, [])
+                if not matches:
+                    missing.append(remote.device_name)
+                    continue
+                if len(matches) > 1:
+                    ambiguous.append(remote.device_name)
+                    continue
+
+                remote.device_ip = matches[0]["ip"]
+                remote.device_last_seen_at = now
+                remote.save(update_fields=("device_ip", "device_last_seen_at", "updated_at"))
+                synced += 1
+
+        if synced:
+            self.message_user(
+                request,
+                f"Synced {synced} remote control device IP(s).",
+                level=messages.SUCCESS,
+            )
+        if missing:
+            self.message_user(
+                request,
+                "Not found: " + ", ".join(missing),
+                level=messages.WARNING,
+            )
+        if ambiguous:
+            self.message_user(
+                request,
+                "Duplicate DEVICE_NAME responses: " + ", ".join(ambiguous),
+                level=messages.ERROR,
+            )
 
     def get_urls(self):
         urls = super().get_urls()
@@ -254,6 +333,7 @@ class RemoteControlAdmin(admin.ModelAdmin):
                             name=name,
                             slug=slug,
                             location=form.cleaned_data["location"],
+                            device_name=form.cleaned_data["device_name"],
                             template=template,
                             template_slug=template.slug,
                             guest_visible=form.cleaned_data["guest_visible"],

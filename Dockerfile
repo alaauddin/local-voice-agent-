@@ -14,18 +14,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN groupadd --gid "${APP_GID}" kiosk \
-    && useradd --uid "${APP_UID}" --gid kiosk --create-home --shell /usr/sbin/nologin kiosk \
-    && apt-get update -qq \
-    && apt-get install -y --no-install-recommends tini \
-    && rm -rf /var/lib/apt/lists/*
+    && useradd --uid "${APP_UID}" --gid kiosk --create-home --shell /usr/sbin/nologin kiosk
 
 COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --upgrade pip \
+    apt-get update -qq \
+    && apt-get install -y --no-install-recommends build-essential tini \
+    && python -m pip install --upgrade pip \
     && pip install --no-compile -r requirements.txt \
-    && pip uninstall -y pytest pytest-django factory-boy 2>/dev/null || true \
-    && find /usr/local/lib/python3.13 -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null; true \
-    && find /usr/local -type f -name "*.pyc" -delete 2>/dev/null; true
+    && apt-get purge -y --auto-remove build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    && find /usr/local/lib/python3.13 -type d -name __pycache__ -prune -exec rm -rf {} + \
+    && find /usr/local -type f -name "*.pyc" -delete
 
 COPY --chown=kiosk:kiosk . .
 RUN mkdir -p /app/data /app/staticfiles \

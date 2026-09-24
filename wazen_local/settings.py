@@ -139,4 +139,23 @@ SAAS_TENANT_SUBDOMAIN = os.getenv("SAAS_TENANT_SUBDOMAIN", "")
 SAAS_TIMEOUT_SECONDS = float(os.getenv("SAAS_TIMEOUT_SECONDS", "5"))
 
 REMOTE_COMMAND_TIMEOUT_SECONDS = float(os.getenv("REMOTE_COMMAND_TIMEOUT_SECONDS", "3"))
+DEVICE_DISCOVERY_TIMEOUT_SECONDS = float(os.getenv("DEVICE_DISCOVERY_TIMEOUT_SECONDS", "0.4"))
+DEVICE_DISCOVERY_MAX_HOSTS = int(os.getenv("DEVICE_DISCOVERY_MAX_HOSTS", "1024"))
+DEVICE_DISCOVERY_WORKERS = int(os.getenv("DEVICE_DISCOVERY_WORKERS", "64"))
+DEVICE_DISCOVERY_NETWORK = os.getenv("DEVICE_DISCOVERY_NETWORK", "").strip()
 REMOTE_BUTTON_COOLDOWN_SECONDS = float(os.getenv("REMOTE_BUTTON_COOLDOWN_SECONDS", "1.5"))
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "kiosk_agent.device_discovery": {
+            "handlers": ["console"],
+            "level": os.getenv("DEVICE_DISCOVERY_LOG_LEVEL", "INFO").upper(),
+            "propagate": False,
+        },
+    },
+}

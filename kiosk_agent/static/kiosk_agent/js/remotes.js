@@ -90,7 +90,8 @@ function renderRemotes() {
     const name = document.createElement("strong");
     name.textContent = remote.name;
     const location = document.createElement("small");
-    location.textContent = remote.location || "داخل الشاليه";
+    location.textContent =
+      [remote.location, remote.device_name].filter(Boolean).join(" · ") || "داخل الشاليه";
     copy.append(name, location);
     const configuredCount = remote.buttons.filter((button) => button.configured).length;
     const count = document.createElement("span");

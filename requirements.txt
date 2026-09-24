@@ -10,3 +10,5 @@ httpx==0.28.1
 pydantic==2.11.7
 python-dotenv==1.1.1
 whitenoise==6.9.0
+netifaces==0.11.0
+scapy==2.7.0

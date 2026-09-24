@@ -96,6 +96,7 @@ class RemoteControlTests(TestCase):
         self.assertNotIn("command_payload", button)
         self.assertNotIn("192.168.1.102", str(payload))
         self.assertNotIn("8980", str(payload))
+        self.assertIsNone(payload["remotes"][0].get("device_ip"))
 
     @patch("kiosk_agent.remote_control.httpx.Client")
     def test_kiosk_press_posts_stored_command_from_backend(self, client_cls):
@@ -146,6 +147,54 @@ class RemoteControlTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["status"], "unconfigured")
 
+    @patch("kiosk_agent.remote_control.httpx.Client")
+    def test_device_ip_links_all_remote_buttons_by_device_name(self, client_cls):
+        self.remote.device_name = "ESP32 IR Controller"
+        self.remote.device_ip = "192.168.1.77"
+        self.remote.save(update_fields=["device_name", "device_ip"])
+
+        controller_response = type("Resp", (), {})()
+        controller_response.status_code = 200
+        controller_response.json = lambda: {"status": "success"}
+        client = client_cls.return_value.__enter__.return_value
+        client.post.return_value = controller_response
+
+        press_remote_button(self.button.pk, source="admin")
+
+        client.post.assert_called_once_with(
+            "http://192.168.1.77/ir",
+            json={"id": 1, "frequency": 38, "raw": SAMPLE_RAW},
+        )
+
+    @patch("kiosk_agent.admin.discover_identity_devices")
+    def test_admin_action_syncs_ip_by_device_name(self, discover):
+        from django.contrib.auth import get_user_model
+
+        user = get_user_model().objects.create_superuser("sync-admin", "sync@b.c", "pass")
+        self.client.force_login(user)
+        self.remote.device_name = "ESP32 IR Controller"
+        self.remote.save(update_fields=["device_name"])
+        discover.return_value = [
+            {
+                "name": "ESP32 IR Controller",
+                "type": "esp32",
+                "ip": "192.168.1.88",
+            }
+        ]
+
+        response = self.client.post(
+            reverse("admin:kiosk_agent_remotecontrol_changelist"),
+            {
+                "action": "sync_device_ips",
+                "_selected_action": [self.remote.pk],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.remote.refresh_from_db()
+        self.assertEqual(self.remote.device_ip, "192.168.1.88")
+        self.assertIsNotNone(self.remote.device_last_seen_at)
+
     def test_copy_from_template_creates_blank_urls(self):
         from django.contrib.auth import get_user_model
 
@@ -158,6 +207,7 @@ class RemoteControlTests(TestCase):
                 "name": "Living fan",
                 "slug": "living-fan",
                 "location": "Living",
+                "device_name": "ESP32 IR Controller",
                 "guest_visible": "on",
             },
         )
@@ -167,6 +217,7 @@ class RemoteControlTests(TestCase):
         self.assertEqual(button.label, "Power On")
         self.assertEqual(button.command_url, "")
         self.assertEqual(button.raw, [])
+        self.assertEqual(remote.device_name, "ESP32 IR Controller")
 
     def test_seeded_templates_exist(self):
         self.assertTrue(RemoteTemplate.objects.filter(slug="fan").exists())

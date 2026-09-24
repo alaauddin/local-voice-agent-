@@ -153,7 +153,7 @@ def press_remote_button(
     """POST a stored IR command server-side. Command data never comes from the guest request."""
     close_old_connections()
     button = _load_pressable_button(button_id, require_guest_visible=require_guest_visible)
-    url = validate_command_url(button.command_url)
+    url = validate_command_url(button.target_command_url)
     payload = validate_ir_command(button.ir_id, button.frequency, button.raw)
 
     _check_cooldown(button.pk)

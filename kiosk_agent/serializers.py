@@ -86,6 +86,7 @@ class RemoteControlPublicSerializer(serializers.ModelSerializer):
             "name",
             "slug",
             "location",
+            "device_name",
             "sort_order",
             "buttons",
         )

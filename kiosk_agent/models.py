@@ -242,6 +242,19 @@ class RemoteControl(models.Model):
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=120, unique=True)
     location = models.CharField(max_length=120, blank=True)
+    device_name = models.CharField(
+        max_length=120,
+        blank=True,
+        db_index=True,
+        help_text="Must match DEVICE_NAME reported by the ESP32 /identity endpoint.",
+    )
+    device_ip = models.GenericIPAddressField(
+        protocol="IPv4",
+        blank=True,
+        null=True,
+        help_text="Current IP discovered by the Sync device IPs admin action.",
+    )
+    device_last_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
     template = models.ForeignKey(
         RemoteTemplate,
         on_delete=models.PROTECT,
@@ -326,7 +339,14 @@ class RemoteButton(models.Model):
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.command_url and self.command_url.strip() and self.raw)
+        return bool(self.target_command_url and self.raw)
+
+    @property
+    def target_command_url(self) -> str:
+        """Prefer the endpoint discovered for the remote's stable DEVICE_NAME."""
+        if self.remote.device_name and self.remote.device_ip:
+            return f"http://{self.remote.device_ip}/ir"
+        return (self.command_url or "").strip()
 
     @property
     def command_payload(self) -> dict:
