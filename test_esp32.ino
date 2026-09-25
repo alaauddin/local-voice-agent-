@@ -4,9 +4,13 @@
 
 #include <WebServer.h>
 
+#include <HTTPClient.h>
+
 #include <Preferences.h>
 
 #include <ArduinoJson.h>
+
+#include "ac_controller.h"a
 
 
 
@@ -18,7 +22,16 @@
 
 
 
+// Arduino-IRremote is header-only and otherwise exports the same global class
+// names as IRremoteESP8266. Rename only its C++ symbols so both libraries can
+// coexist without changing the existing RAW receive/send implementation.
+#define IRsend ArduinoRawIRsend
+#define IRrecv ArduinoRawIRrecv
+#define decode_type_t ArduinoRawDecodeType
 #include <IRremote.hpp>
+#undef decode_type_t
+#undef IRrecv
+#undef IRsend
 
 
 
@@ -29,7 +42,7 @@ const char* DEVICE_NAME = "ESP32 IR Controller";
 const char* DEVICE_TYPE = "esp32";
 const char* DEVICE_HOSTNAME = "esp32-ir-controller";
 const char* DEVICE_MANUFACTURER = "Espressif";
-const char* FIRMWARE_VERSION = "1.0.0";
+const char* FIRMWARE_VERSION = "1.2.0";
 const char* IDENTITY_PROTOCOL = "wazen-device-identity/1";
 
 
@@ -49,6 +62,19 @@ const uint8_t IR_ID = 1;
 
 
 
+// Leave empty to disable ESP32 -> Django callbacks. Set this once for the
+// deployment instead of hardcoding backend addresses throughout the sketch.
+
+const char* DJANGO_BASE_URL = "";
+
+const char* DJANGO_AC_SYNC_PATH = "/api/internal/ac-state-sync/";
+
+const char* DJANGO_SYNC_TOKEN = "";
+
+const uint32_t AC_SYNC_RETRY_INTERVAL_MS = 10000;
+
+
+
 const uint32_t CAPTURE_TIMEOUT_MS = 15000;
 
 const uint32_t WIFI_CONNECT_TIMEOUT_MS = 20000;
@@ -60,6 +86,13 @@ const uint32_t WIFI_RETRY_INTERVAL_MS = 10000;
 WebServer server(80);
 
 Preferences preferences;
+
+ACController acController(
+  IR_SEND_PINS,
+
+  IR_SEND_PIN_COUNT
+
+);
 
 
 
@@ -91,6 +124,12 @@ unsigned long lastReconnectAttempt = 0;
 uint32_t signalRevision = 0;
 
 wl_status_t lastWiFiStatus = WL_NO_SHIELD;
+
+bool pendingACSync = false;
+
+String pendingACSyncBody;
+
+unsigned long nextACSyncAttempt = 0;
 
 
 
@@ -1389,6 +1428,8 @@ void handleIdentity() {
 
   capabilities.add("http_api");
 
+  capabilities.add("ac_control");
+
 
 
   String response;
@@ -1789,6 +1830,238 @@ void handleDelete() {
 
 
 
+
+
+void pauseReceiverForAC() {
+  captureEnabled = false;
+  IrReceiver.stop();
+  delay(2);
+}
+
+
+void resumeReceiverAfterAC() {
+  for (size_t i = 0; i < IR_SEND_PIN_COUNT; i++) {
+    digitalWrite(IR_SEND_PINS[i], LOW);
+  }
+  // Restore the pin expected by the existing RAW sender.
+  IrSender.setSendPin(IR_SEND_PINS[0]);
+  IrReceiver.start();
+}
+
+
+void sendJsonDocument(int statusCode, JsonDocument& doc) {
+  String response;
+  serializeJson(doc, response);
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(statusCode, "application/json", response);
+}
+
+
+void sendACError(int statusCode, const String& message) {
+  JsonDocument doc;
+  doc["success"] = false;
+  doc["message"] = message;
+  sendJsonDocument(statusCode, doc);
+}
+
+
+void queueACStateSync(const String& requestId) {
+  if (strlen(DJANGO_BASE_URL) == 0) return;
+
+  JsonDocument doc;
+  doc["esp32_id"] = DEVICE_NAME;
+  doc["source"] = "esp32";
+  if (requestId.length() > 0) doc["request_id"] = requestId;
+
+  const ACDeviceConfig& config = acController.config();
+  const ACDeviceRuntime& runtime = acController.runtime();
+  doc["brand"] = config.brand;
+  doc["protocol"] = config.protocol;
+  doc["model"] = config.model;
+  doc["state_version"] = runtime.stateVersion;
+  doc["updated_at"] = runtime.updatedAt;
+  JsonObject state = doc["state"].to<JsonObject>();
+  acController.writeState(state, runtime.state);
+
+  pendingACSyncBody = "";
+  serializeJson(doc, pendingACSyncBody);
+  pendingACSync = true;
+  nextACSyncAttempt = millis();
+}
+
+
+void serviceACStateSync() {
+  if (
+    !pendingACSync ||
+    WiFi.status() != WL_CONNECTED ||
+    static_cast<int32_t>(millis() - nextACSyncAttempt) < 0
+  ) {
+    return;
+  }
+
+  HTTPClient http;
+  const String url = String(DJANGO_BASE_URL) + DJANGO_AC_SYNC_PATH;
+  http.setConnectTimeout(1500);
+  http.setTimeout(2500);
+  if (!http.begin(url)) {
+    nextACSyncAttempt = millis() + AC_SYNC_RETRY_INTERVAL_MS;
+    return;
+  }
+  http.addHeader("Content-Type", "application/json");
+  if (strlen(DJANGO_SYNC_TOKEN) > 0) {
+    http.addHeader("X-ESP32-Token", DJANGO_SYNC_TOKEN);
+  }
+  const int statusCode = http.POST(pendingACSyncBody);
+  http.end();
+
+  if (statusCode >= 200 && statusCode < 300) {
+    pendingACSync = false;
+    pendingACSyncBody = "";
+  } else {
+    nextACSyncAttempt = millis() + AC_SYNC_RETRY_INTERVAL_MS;
+    Serial.print("AC state sync failed, HTTP status: ");
+    Serial.println(statusCode);
+  }
+}
+
+
+void handleGetACState() {
+  if (!acController.isConfigured()) {
+    sendACError(404, "AC controller has not received a configuration yet");
+    return;
+  }
+
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
+  acController.writeController(root);
+  doc["source"] = "esp32";
+  sendJsonDocument(200, doc);
+}
+
+
+void handleGetACCapabilities() {
+  if (!acController.isConfigured()) {
+    sendACError(404, "AC controller has not received a configuration yet");
+    return;
+  }
+
+  const ACDeviceConfig& config = acController.config();
+  JsonDocument doc;
+  doc["brand"] = config.brand;
+  doc["protocol"] = config.protocol;
+  doc["model"] = config.model;
+  JsonArray outputs = doc["send_gpios"].to<JsonArray>();
+  for (size_t i = 0; i < IR_SEND_PIN_COUNT; i++) outputs.add(IR_SEND_PINS[i]);
+  JsonObject capabilities = doc["capabilities"].to<JsonObject>();
+  acController.writeCapabilities(capabilities);
+  sendJsonDocument(200, doc);
+}
+
+
+void handleGetACStates() {
+  JsonDocument doc;
+  doc["source"] = "esp32";
+  JsonArray devices = doc["devices"].to<JsonArray>();
+  if (acController.isConfigured()) {
+    JsonObject device = devices.add<JsonObject>();
+    acController.writeController(device);
+  }
+  sendJsonDocument(200, doc);
+}
+
+
+void handleSetACState() {
+  if (!server.hasArg("plain")) {
+    sendACError(400, "body missing");
+    return;
+  }
+  const String body = server.arg("plain");
+  if (body.length() == 0 || body.length() > 4096) {
+    sendACError(413, "body is empty or too large");
+    return;
+  }
+
+  JsonDocument doc;
+  const DeserializationError jsonError = deserializeJson(doc, body);
+  if (jsonError || !doc.is<JsonObject>()) {
+    sendACError(400, "invalid JSON object");
+    return;
+  }
+  JsonObjectConst patch = doc.as<JsonObjectConst>();
+  if (
+    !patch["brand"].is<const char*>() ||
+    !patch["protocol"].is<const char*>() ||
+    !patch["model"].is<const char*>()
+  ) {
+    sendACError(400, "brand, protocol, and model are required");
+    return;
+  }
+  ACDeviceConfig config = {
+    patch["brand"].as<String>(),
+    patch["protocol"].as<String>(),
+    patch["model"].as<String>()
+  };
+
+  String requestId;
+  if (patch.containsKey("request_id")) {
+    if (!patch["request_id"].is<const char*>()) {
+      sendACError(400, "request_id must be a string");
+      return;
+    }
+    requestId = patch["request_id"].as<String>();
+    if (requestId.length() > 96) {
+      sendACError(400, "request_id is too long");
+      return;
+    }
+  }
+
+  const bool hasRequestedVersion = patch.containsKey("state_version");
+  if (hasRequestedVersion && !patch["state_version"].is<uint32_t>()) {
+    sendACError(400, "state_version must be a non-negative integer");
+    return;
+  }
+  const uint32_t requestedVersion =
+    hasRequestedVersion ? patch["state_version"].as<uint32_t>() : 0;
+  const uint32_t previousVersion = acController.runtime().stateVersion;
+
+  String error;
+  if (!acController.applyPatch(
+        config,
+        patch,
+        requestedVersion,
+        hasRequestedVersion,
+        error
+      )) {
+    int statusCode = error.startsWith("state_version") ? 409 : 400;
+    if (
+      error.startsWith("configured IR") ||
+      error.startsWith("unsupported AC protocol") ||
+      error.startsWith("AC protocol library")
+    ) {
+      statusCode = 500;
+    }
+    sendACError(statusCode, error);
+    return;
+  }
+
+  const ACDeviceRuntime& runtime = acController.runtime();
+  JsonDocument response;
+  response["success"] = true;
+  response["source"] = "esp32";
+  if (requestId.length() > 0) response["request_id"] = requestId;
+  response["brand"] = acController.config().brand;
+  response["protocol"] = acController.config().protocol;
+  response["model"] = acController.config().model;
+  response["state_version"] = runtime.stateVersion;
+  response["updated_at"] = runtime.updatedAt;
+  JsonObject state = response["state"].to<JsonObject>();
+  acController.writeState(state, runtime.state);
+  sendJsonDocument(200, response);
+
+  if (runtime.stateVersion != previousVersion) {
+    queueACStateSync(requestId);
+  }
+}
 
 
 void handleApiIR() {
@@ -2610,6 +2883,16 @@ void setup() {
 
 
 
+  acController.begin(
+
+    pauseReceiverForAC,
+
+    resumeReceiverAfterAC
+
+  );
+
+
+
   connectWiFi();
 
 
@@ -2764,6 +3047,54 @@ void setup() {
 
 
 
+  server.on(
+
+    "/api/ac/state",
+
+    HTTP_GET,
+
+    handleGetACState
+
+  );
+
+
+
+  server.on(
+
+    "/api/ac/state",
+
+    HTTP_POST,
+
+    handleSetACState
+
+  );
+
+
+
+  server.on(
+
+    "/api/ac/capabilities",
+
+    HTTP_GET,
+
+    handleGetACCapabilities
+
+  );
+
+
+
+  server.on(
+
+    "/api/ac/states",
+
+    HTTP_GET,
+
+    handleGetACStates
+
+  );
+
+
+
   server.onNotFound(
 
     []() {
@@ -2835,6 +3166,10 @@ void loop() {
 
 
   serviceWiFi();
+
+
+
+  serviceACStateSync();
 
 
 

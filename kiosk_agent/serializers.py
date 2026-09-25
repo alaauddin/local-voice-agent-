@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
-from .models import ChaletConfig, KioskMessage, RemoteButton, RemoteControl
+from .ac_control import serialize_ac_state
+from .models import ACState, ChaletConfig, KioskMessage, RemoteButton, RemoteControl
 
 
 class ChatRequestSerializer(serializers.Serializer):
@@ -78,6 +79,8 @@ class RemoteButtonPublicSerializer(serializers.ModelSerializer):
 
 class RemoteControlPublicSerializer(serializers.ModelSerializer):
     buttons = serializers.SerializerMethodField()
+    brand_label = serializers.CharField(source="get_brand_display", read_only=True)
+    ac_state = serializers.SerializerMethodField()
 
     class Meta:
         model = RemoteControl
@@ -87,10 +90,29 @@ class RemoteControlPublicSerializer(serializers.ModelSerializer):
             "slug",
             "location",
             "device_name",
+            "device_type",
+            "brand",
+            "brand_label",
+            "protocol",
+            "protocol_model",
             "sort_order",
+            "ac_state",
             "buttons",
         )
 
     def get_buttons(self, obj):
         buttons = [button for button in obj.buttons.all() if button.is_active]
         return RemoteButtonPublicSerializer(buttons, many=True).data
+
+    def get_ac_state(self, obj):
+        if obj.device_type != RemoteControl.DeviceType.AC:
+            return None
+        try:
+            state = obj.ac_state
+        except ACState.DoesNotExist:
+            state, _ = ACState.objects.get_or_create(device=obj)
+        return {
+            "state_version": state.state_version,
+            "updated_at": state.updated_at,
+            **serialize_ac_state(state),
+        }

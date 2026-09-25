@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    ACStateView,
     ChatView,
     HealthView,
     MemoryView,
@@ -28,6 +29,7 @@ urlpatterns = [
     path("realtime/messages/", RealtimeMessageView.as_view(), name="realtime-message"),
     path("realtime/tools/", RealtimeToolView.as_view(), name="realtime-tool"),
     path("remotes/", RemotesListView.as_view(), name="remotes"),
+    path("devices/<int:device_id>/ac-state/", ACStateView.as_view(), name="ac-state"),
     path(
         "remote-buttons/<int:button_id>/press/",
         RemoteButtonPressView.as_view(),

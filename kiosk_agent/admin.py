@@ -11,6 +11,7 @@ from django.utils.text import slugify
 
 from .device_discovery import DeviceDiscoveryError, discover_identity_devices
 from .models import (
+    ACState,
     ChaletConfig,
     KioskAuditLog,
     KioskMessage,
@@ -136,7 +137,25 @@ class RemoteTemplateAdmin(admin.ModelAdmin):
 class RemoteButtonForm(forms.ModelForm):
     class Meta:
         model = RemoteButton
-        fields = "__all__"
+        fields = (
+            "remote",
+            "key",
+            "label",
+            "icon",
+            "sort_order",
+            "row",
+            "column",
+            "command_url",
+            "ir_id",
+            "frequency",
+            "raw",
+            "is_active",
+            "requires_confirmation",
+        )
+        widgets = {
+            "command_url": forms.TextInput(attrs={"placeholder": "http://controller-ip/ir"}),
+            "raw": forms.Textarea(attrs={"rows": 4, "placeholder": "[9000, 4500, 560, ...]"}),
+        }
 
     def clean_command_url(self):
         value = (self.cleaned_data.get("command_url") or "").strip()
@@ -159,25 +178,39 @@ class RemoteButtonForm(forms.ModelForm):
         return cleaned_data
 
 
-class RemoteButtonInline(admin.TabularInline):
+class RemoteButtonInline(admin.StackedInline):
     model = RemoteButton
     form = RemoteButtonForm
-    extra = 0
-    fields = (
-        "key",
-        "label",
-        "icon",
-        "row",
-        "column",
-        "sort_order",
-        "command_url",
-        "ir_id",
-        "frequency",
-        "raw",
-        "is_active",
-        "requires_confirmation",
-        "resolved_endpoint",
-        "test_link",
+    extra = 1
+    verbose_name_plural = "RAW remote buttons"
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    ("label", "key", "icon"),
+                    ("is_active", "requires_confirmation"),
+                ),
+            },
+        ),
+        (
+            "IR command",
+            {
+                "fields": (
+                    "command_url",
+                    ("ir_id", "frequency"),
+                    "raw",
+                    ("resolved_endpoint", "test_link"),
+                ),
+            },
+        ),
+        (
+            "Button position",
+            {
+                "fields": (("row", "column", "sort_order"),),
+                "classes": ("collapse",),
+            },
+        ),
     )
     readonly_fields = ("resolved_endpoint", "test_link")
 
@@ -210,22 +243,114 @@ class AddRemoteFromTemplateForm(forms.Form):
     voice_enabled = forms.BooleanField(required=False, initial=False)
 
 
+class RemoteControlAdminForm(forms.ModelForm):
+    class Meta:
+        model = RemoteControl
+        fields = (
+            "name",
+            "slug",
+            "location",
+            "device_name",
+            "device_ip",
+            "device_type",
+            "brand",
+            "protocol",
+            "protocol_model",
+            "template",
+            "template_slug",
+            "is_active",
+            "voice_enabled",
+            "guest_visible",
+            "sort_order",
+        )
+        widgets = {
+            "name": forms.TextInput(attrs={"placeholder": "e.g. Living Room AC"}),
+            "location": forms.TextInput(attrs={"placeholder": "e.g. Living room"}),
+            "device_name": forms.TextInput(attrs={"placeholder": "ESP32 IR Controller"}),
+        }
+        help_texts = {
+            "device_type": "Choose Air conditioner for state-based Gree, Haier, Midea, or Hisense control. Choose Raw IR for TVs, fans, and learned remotes.",
+            "brand": "The appliance brand. This does not replace the protocol selection.",
+            "protocol": "The exact IR protocol the selected ESP32 should transmit.",
+            "protocol_model": "Use Default unless you know the remote/model variant.",
+            "guest_visible": "Show this remote to guests on the kiosk.",
+            "voice_enabled": "Allow voice commands to control this remote.",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            self.fields["device_name"].initial = "ESP32 IR Controller"
+            self.fields["protocol_model"].initial = RemoteControl.ProtocolModel.DEFAULT
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("device_type") != RemoteControl.DeviceType.AC:
+            cleaned_data["brand"] = ""
+            cleaned_data["protocol"] = ""
+            cleaned_data["protocol_model"] = ""
+            return cleaned_data
+
+        required = {
+            "brand": "Choose the AC brand.",
+            "protocol": "Choose the exact AC protocol.",
+            "protocol_model": "Choose Default or the matching model variant.",
+            "device_name": "Enter the ESP32 DEVICE_NAME used for discovery and synchronization.",
+        }
+        for field, message in required.items():
+            if cleaned_data.get(field) in (None, ""):
+                self.add_error(field, message)
+        return cleaned_data
+
+
+class ACStateInline(admin.StackedInline):
+    model = ACState
+    extra = 0
+    max_num = 1
+    verbose_name_plural = "Last state confirmed by the ESP32"
+    fieldsets = (
+        (
+            "Main controls",
+            {"fields": (("power", "mode", "temperature", "fan"),)},
+        ),
+        (
+            "Extra features",
+            {
+                "fields": (
+                    ("swing_vertical", "swing_horizontal"),
+                    ("turbo", "sleep", "eco", "quiet"),
+                    ("light", "x_fan"),
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Synchronization",
+            {
+                "fields": (("state_version", "esp32_updated_at", "updated_at"),),
+                "classes": ("collapse",),
+            },
+        ),
+    )
+    readonly_fields = ("state_version", "esp32_updated_at", "updated_at")
+
+
 @admin.register(RemoteControl)
 class RemoteControlAdmin(admin.ModelAdmin):
+    form = RemoteControlAdminForm
     list_display = (
         "name",
-        "slug",
+        "device_kind",
         "location",
-        "device_name",
-        "device_ip",
-        "configured_badge",
+        "brand_and_protocol",
+        "controller_status",
+        "setup_status",
         "is_active",
         "guest_visible",
-        "voice_enabled",
         "sort_order",
         "updated_at",
     )
-    list_filter = ("is_active", "guest_visible", "voice_enabled")
+    list_filter = ("device_type", "brand", "is_active", "guest_visible", "voice_enabled")
     search_fields = ("name", "slug", "location", "device_name", "device_ip")
     prepopulated_fields = {"slug": ("name",)}
     readonly_fields = (
@@ -236,9 +361,114 @@ class RemoteControlAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
-    inlines = (RemoteButtonInline,)
+    fieldsets = (
+        (
+            "Remote details",
+            {
+                "fields": (
+                    ("name", "slug"),
+                    ("location", "device_type"),
+                ),
+                "description": "Start with a friendly name and choose how this appliance is controlled.",
+            },
+        ),
+        (
+            "ESP32 controller",
+            {
+                "fields": (
+                    "device_name",
+                    ("device_ip", "device_last_seen_at"),
+                ),
+                "description": "DEVICE_NAME links this remote to the ESP32. Use the list action “Sync selected device IPs” after saving.",
+            },
+        ),
+        (
+            "Air-conditioner configuration",
+            {
+                "fields": (
+                    ("brand", "protocol"),
+                    "protocol_model",
+                ),
+                "classes": ("ac-config",),
+                "description": "Only used for Air conditioner remotes. Django sends this configuration to the ESP32 selected by DEVICE_NAME.",
+            },
+        ),
+        (
+            "Availability",
+            {
+                "fields": (
+                    ("is_active", "guest_visible", "voice_enabled"),
+                    "sort_order",
+                ),
+            },
+        ),
+        (
+            "Template and history",
+            {
+                "fields": (
+                    ("template", "template_slug"),
+                    ("created_at", "updated_at"),
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+    )
     change_list_template = "admin/kiosk_agent/remotecontrol/change_list.html"
+    change_form_template = "admin/kiosk_agent/remotecontrol/change_form.html"
     actions = ("sync_device_ips",)
+
+    def get_inlines(self, request, obj):
+        if obj is None:
+            return ()
+        if obj.device_type == RemoteControl.DeviceType.AC:
+            return (ACStateInline,)
+        return (RemoteButtonInline,)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if obj.device_type == RemoteControl.DeviceType.AC:
+            ACState.objects.get_or_create(device=obj)
+
+    def response_add(self, request, obj, post_url_continue=None):
+        if "_addanother" in request.POST:
+            return super().response_add(request, obj, post_url_continue)
+        self.message_user(
+            request,
+            "Remote created. Complete its AC state or RAW buttons below.",
+            level=messages.SUCCESS,
+        )
+        return HttpResponseRedirect(
+            reverse("admin:kiosk_agent_remotecontrol_change", args=[obj.pk])
+        )
+
+    @admin.display(description="Type", ordering="device_type")
+    def device_kind(self, obj):
+        return obj.get_device_type_display()
+
+    @admin.display(description="AC protocol")
+    def brand_and_protocol(self, obj):
+        if obj.device_type != RemoteControl.DeviceType.AC:
+            return "Raw IR"
+        brand = obj.get_brand_display() or "—"
+        protocol = obj.get_protocol_display() or "—"
+        return f"{brand} / {protocol}"
+
+    @admin.display(description="Controller")
+    def controller_status(self, obj):
+        if obj.device_ip:
+            return format_html('<span class="status-ready">● {}</span>', obj.device_ip)
+        return format_html('<span class="status-warning">● IP not synced</span>')
+
+    @admin.display(description="Setup")
+    def setup_status(self, obj):
+        if obj.device_type == RemoteControl.DeviceType.AC:
+            ready = all((obj.brand, obj.protocol, obj.protocol_model, obj.device_name))
+            label = "Ready" if ready else "Needs AC setup"
+        else:
+            ready = obj.configured_count > 0
+            label = f"{obj.configured_count}/{obj.active_button_count} buttons"
+        css_class = "status-ready" if ready else "status-warning"
+        return format_html('<span class="{}">{}</span>', css_class, label)
 
     @admin.display(description="Configured")
     def configured_badge(self, obj):

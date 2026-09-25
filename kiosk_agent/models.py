@@ -239,6 +239,34 @@ class RemoteTemplateButton(models.Model):
 
 
 class RemoteControl(models.Model):
+    class DeviceType(models.TextChoices):
+        RAW = "raw", "Raw IR"
+        AC = "ac", "Air conditioner"
+
+    class Brand(models.TextChoices):
+        GREE = "gree", "Gree"
+        HAIER = "haier", "Haier"
+        MIDEA = "midea", "Midea"
+        HISENSE = "hisense", "Hisense"
+
+    class Protocol(models.TextChoices):
+        GREE = "gree", "Gree"
+        HAIER_AC = "haier_ac", "Haier AC"
+        HAIER_AC_YRW02 = "haier_ac_yrw02", "Haier AC YR-W02"
+        HAIER_AC160 = "haier_ac160", "Haier AC 160-bit"
+        HAIER_AC176 = "haier_ac176", "Haier AC 176-bit"
+        MIDEA = "midea", "Midea"
+        KELON168 = "kelon168", "Kelon 168-bit (Hisense)"
+
+    class ProtocolModel(models.TextChoices):
+        DEFAULT = "default", "Default"
+        GREE_YAW1F = "yaw1f", "Gree YAW1F"
+        GREE_YBOFB = "ybofb", "Gree YBOFB"
+        GREE_YX1FSF = "yx1fsf", "Gree YX1FSF"
+        HAIER_V9014557_A = "v9014557_a", "Haier V9014557 A"
+        HAIER_V9014557_B = "v9014557_b", "Haier V9014557 B"
+        HISENSE_DG11R201 = "dg11r2-01", "Hisense/Kelon DG11R2-01"
+
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=120, unique=True)
     location = models.CharField(max_length=120, blank=True)
@@ -255,6 +283,18 @@ class RemoteControl(models.Model):
         help_text="Current IP discovered by the Sync device IPs admin action.",
     )
     device_last_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
+    device_type = models.CharField(
+        max_length=20,
+        choices=DeviceType.choices,
+        default=DeviceType.RAW,
+    )
+    brand = models.CharField(max_length=50, choices=Brand.choices, blank=True)
+    protocol = models.CharField(max_length=50, choices=Protocol.choices, blank=True)
+    protocol_model = models.CharField(
+        max_length=50,
+        choices=ProtocolModel.choices,
+        blank=True,
+    )
     template = models.ForeignKey(
         RemoteTemplate,
         on_delete=models.PROTECT,
@@ -278,6 +318,13 @@ class RemoteControl(models.Model):
 
     class Meta:
         ordering = ("sort_order", "name")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("device_name",),
+                condition=models.Q(device_type="ac") & ~models.Q(device_name=""),
+                name="uniq_ac_remote_device_name",
+            ),
+        ]
 
     def __str__(self):
         return self.name
@@ -289,6 +336,45 @@ class RemoteControl(models.Model):
     @property
     def active_button_count(self) -> int:
         return self.buttons.filter(is_active=True).count()
+
+
+class ACState(models.Model):
+    class Mode(models.TextChoices):
+        AUTO = "auto", "Auto"
+        COOL = "cool", "Cool"
+        HEAT = "heat", "Heat"
+        DRY = "dry", "Dry"
+        FAN = "fan", "Fan"
+
+    class Fan(models.TextChoices):
+        AUTO = "auto", "Auto"
+        LOW = "low", "Low"
+        MEDIUM = "medium", "Medium"
+        HIGH = "high", "High"
+
+    device = models.OneToOneField(
+        RemoteControl,
+        on_delete=models.CASCADE,
+        related_name="ac_state",
+    )
+    power = models.BooleanField(default=False)
+    mode = models.CharField(max_length=20, choices=Mode.choices, default=Mode.COOL)
+    temperature = models.PositiveSmallIntegerField(default=24)
+    fan = models.CharField(max_length=20, choices=Fan.choices, default=Fan.AUTO)
+    swing_vertical = models.BooleanField(default=False)
+    swing_horizontal = models.BooleanField(default=False)
+    turbo = models.BooleanField(default=False)
+    sleep = models.BooleanField(default=False)
+    eco = models.BooleanField(default=False)
+    quiet = models.BooleanField(default=False)
+    light = models.BooleanField(default=False)
+    x_fan = models.BooleanField(default=False)
+    state_version = models.PositiveBigIntegerField(default=0)
+    esp32_updated_at = models.PositiveBigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"AC state: {self.device.name}"
 
 
 class RemoteButton(models.Model):

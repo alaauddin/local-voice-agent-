@@ -1,0 +1,90 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .status-ready { color: var(--body-fg); font-weight: 600; }
+  .status-warning { color: #ba6d00; font-weight: 600; }
+  fieldset.ac-config { border-left: 4px solid var(--primary, #417690); }
+  fieldset.ac-config > h2, .inline-group .module h2 { font-weight: 700; }
+  .inline-related fieldset.module { margin-bottom: 8px; }
+  @media (min-width: 1024px) {
+    .field-name input, .field-location input, .field-device_name input { min-width: 28rem; }
+  }
+</style>
+{% endblock %}
+
+{% block admin_change_form_document_ready %}
+{{ block.super }}
+<script>
+(() => {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+  const deviceType = byId("id_device_type");
+  const brand = byId("id_brand");
+  const protocol = byId("id_protocol");
+  const protocolModel = byId("id_protocol_model");
+  const acSection = document.querySelector("fieldset.ac-config");
+  if (!deviceType || !brand || !protocol || !protocolModel || !acSection) return;
+
+  const protocolOptions = Array.from(protocol.options).map((option) => option.cloneNode(true));
+  const modelOptions = Array.from(protocolModel.options).map((option) => option.cloneNode(true));
+  const protocolsByBrand = {
+    gree: ["gree"],
+    haier: ["haier_ac", "haier_ac_yrw02", "haier_ac160", "haier_ac176"],
+    midea: ["midea"],
+    hisense: ["kelon168"],
+  };
+  const defaultProtocol = {
+    gree: "gree",
+    haier: "haier_ac_yrw02",
+    midea: "midea",
+    hisense: "kelon168",
+  };
+  const modelsByProtocol = {
+    gree: ["default", "yaw1f", "ybofb", "yx1fsf"],
+    haier_ac: ["default"],
+    haier_ac_yrw02: ["default"],
+    haier_ac160: ["default"],
+    haier_ac176: ["default", "v9014557_a", "v9014557_b"],
+    midea: ["default"],
+    kelon168: ["default", "dg11r2-01"],
+  };
+
+  const replaceOptions = (select, originals, allowed, preferred) => {
+    const current = select.value;
+    select.replaceChildren();
+    originals.forEach((option) => {
+      if (!option.value || !allowed || allowed.includes(option.value)) {
+        select.append(option.cloneNode(true));
+      }
+    });
+    const available = Array.from(select.options).map((option) => option.value);
+    if (current && available.includes(current)) select.value = current;
+    else if (available.includes(preferred)) select.value = preferred;
+  };
+
+  const updateModels = () => {
+    replaceOptions(protocolModel, modelOptions, modelsByProtocol[protocol.value] || null, "default");
+  };
+  const updateProtocols = () => {
+    replaceOptions(
+      protocol,
+      protocolOptions,
+      protocolsByBrand[brand.value] || null,
+      defaultProtocol[brand.value] || ""
+    );
+    updateModels();
+  };
+  const updateDeviceType = () => {
+    acSection.hidden = deviceType.value !== "ac";
+  };
+
+  deviceType.addEventListener("change", updateDeviceType);
+  brand.addEventListener("change", updateProtocols);
+  protocol.addEventListener("change", updateModels);
+  updateProtocols();
+  updateDeviceType();
+})();
+</script>
+{% endblock %}

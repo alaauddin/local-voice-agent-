@@ -6,7 +6,9 @@ import { realtimeEnabled } from "./js/config.js";
 import {
   populatePreferredMic, unlockAudio, preferredMicKey,
 } from "./js/audio-core.js";
-import { loadRemotes, bindRemotesUi } from "./js/remotes.js";
+import {
+  loadRemotes, bindRemotesUi, startRemotesRefresh,
+} from "./js/remotes.js?v=remote-popup-1";
 import {
   setAvatar, preloadAvatarVideos, setMessagesOpen, updateControls,
   cancelAutoStart, scheduleAutoRealtime, setConnection, loadMemory,
@@ -122,4 +124,5 @@ preloadAvatarVideos();
 configureRecognition();
 loadMemory();
 loadRemotes();
+startRemotesRefresh();
 connect();

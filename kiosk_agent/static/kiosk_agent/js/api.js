@@ -21,4 +21,13 @@ async function postJson(url, payload) {
   return data;
 }
 
-export { headers, uuid, postJson };
+async function patchJson(url, payload) {
+  const response = await fetch(url, {
+    method: "PATCH", headers: headers(), body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.detail || data.error || `HTTP ${response.status}`);
+  return data;
+}
+
+export { headers, uuid, postJson, patchJson };

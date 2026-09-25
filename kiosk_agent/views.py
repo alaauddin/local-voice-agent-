@@ -15,10 +15,23 @@ from rest_framework import parsers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .ac_control import (
+    ACControlError,
+    accept_esp32_state_sync,
+    serialize_ac_state,
+    set_ac_state,
+)
 from .core.agent_engine import stay_group
 from .core.realtime import create_realtime_call
 from .core.tools import TOOL_MODELS, execute_tool
-from .models import ChaletConfig, KioskAuditLog, KioskMessage, RealtimeSession, RemoteControl
+from .models import (
+    ACState,
+    ChaletConfig,
+    KioskAuditLog,
+    KioskMessage,
+    RealtimeSession,
+    RemoteControl,
+)
 from .permissions import (
     KIOSK_COOKIE_NAME,
     OptionalKioskKeyPermission,
@@ -431,14 +444,15 @@ class RemotesListView(APIView):
     def get(self, request):
         remotes = (
             RemoteControl.objects.filter(is_active=True, guest_visible=True)
+            .select_related("ac_state")
             .prefetch_related("buttons")
             .order_by("sort_order", "name")
         )
-        # Only expose remotes that have at least one active button.
+        # AC remotes are state-based and do not need RAW button records.
         payload = []
         for remote in remotes:
             active_buttons = [b for b in remote.buttons.all() if b.is_active]
-            if not active_buttons:
+            if remote.device_type != RemoteControl.DeviceType.AC and not active_buttons:
                 continue
             payload.append(RemoteControlPublicSerializer(remote).data)
         return Response({"remotes": payload})
@@ -481,5 +495,99 @@ class RemoteButtonPressView(APIView):
                 "execution": "server",
                 "label": result.get("label"),
                 "target": result.get("target") or "",
+            }
+        )
+
+
+class ACStateView(APIView):
+    authentication_classes = []
+    permission_classes = (OptionalKioskKeyPermission,)
+
+    def get(self, request, device_id):
+        try:
+            device = RemoteControl.objects.get(
+                pk=device_id,
+                device_type=RemoteControl.DeviceType.AC,
+            )
+        except RemoteControl.DoesNotExist:
+            return Response({"detail": "AC device not found."}, status=status.HTTP_404_NOT_FOUND)
+        state, _ = ACState.objects.get_or_create(device=device)
+        return Response(
+            {
+                "device_id": device.pk,
+                "state_version": state.state_version,
+                "state": serialize_ac_state(state),
+                "updated_at": state.updated_at,
+            }
+        )
+
+    def patch(self, request, device_id):
+        if not isinstance(request.data, dict):
+            return Response({"detail": "JSON object required."}, status=status.HTTP_400_BAD_REQUEST)
+        changes = dict(request.data)
+        request_id = changes.pop("request_id", None)
+        try:
+            state = set_ac_state(device_id, changes, request_id=request_id)
+        except ACControlError as exc:
+            status_map = {
+                "not_found": status.HTTP_404_NOT_FOUND,
+                "wrong_type": status.HTTP_400_BAD_REQUEST,
+                "unconfigured": status.HTTP_400_BAD_REQUEST,
+                "invalid_state": status.HTTP_400_BAD_REQUEST,
+                "timeout": status.HTTP_504_GATEWAY_TIMEOUT,
+                "network_error": status.HTTP_502_BAD_GATEWAY,
+                "controller_error": status.HTTP_502_BAD_GATEWAY,
+                "invalid_response": status.HTTP_502_BAD_GATEWAY,
+                "stale_response": status.HTTP_409_CONFLICT,
+            }
+            return Response(
+                {"success": False, "code": exc.code, "detail": exc.message},
+                status=status_map.get(exc.code, status.HTTP_400_BAD_REQUEST),
+            )
+        return Response(
+            {
+                "success": True,
+                "device_id": state.device_id,
+                "state_version": state.state_version,
+                "state": serialize_ac_state(state),
+                "updated_at": state.updated_at,
+            }
+        )
+
+
+class InternalACStateSyncView(APIView):
+    """ESP32 notification endpoint. It never sends a command back to the ESP32."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        expected_token = settings.ESP32_SYNC_TOKEN
+        supplied_token = request.headers.get("X-ESP32-Token", "")
+        if expected_token and not secrets.compare_digest(expected_token, supplied_token):
+            return Response({"detail": "Invalid ESP32 sync token."}, status=status.HTTP_403_FORBIDDEN)
+        if not isinstance(request.data, dict):
+            return Response({"detail": "JSON object required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            state, applied = accept_esp32_state_sync(dict(request.data))
+        except ACControlError as exc:
+            http_status = (
+                status.HTTP_404_NOT_FOUND
+                if exc.code == "not_found"
+                else status.HTTP_409_CONFLICT
+                if exc.code == "ambiguous_device"
+                else status.HTTP_400_BAD_REQUEST
+            )
+            return Response(
+                {"success": False, "code": exc.code, "detail": exc.message},
+                status=http_status,
+            )
+        return Response(
+            {
+                "success": True,
+                "applied": applied,
+                "request_id": request.data.get("request_id"),
+                "remote_id": state.device_id,
+                "state_version": state.state_version,
             }
         )

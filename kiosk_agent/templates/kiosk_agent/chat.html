@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=remote-grid-6">
+  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=remote-panel-large-1">
 </head>
 <body>
   <main class="kiosk-shell">
@@ -172,6 +172,11 @@
     </div>
   </dialog>
 
-  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=remote-grid-5"></script>
+  <dialog id="remotePopupDialog" class="remote-popup-dialog" aria-label="جهاز التحكم المكبر">
+    <button type="button" id="closeRemotePopup" class="remote-popup-close" aria-label="إغلاق جهاز التحكم">×</button>
+    <div id="remotePopupContent" class="remote-popup-content"></div>
+  </dialog>
+
+  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=remote-popup-1"></script>
 </body>
 </html>
