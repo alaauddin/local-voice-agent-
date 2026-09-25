@@ -60,11 +60,15 @@ export function handleEvent(event) {
     case "tts_audio": receiveChunk(event); break;
     case "tts_chunk_fallback": receiveChunk({ ...event, fallbackText: event.text }); break;
     case "tts_fallback":
+      clearTimeout(state.completionTimer);
       resetAudio(event.nonce, 1);
       receiveChunk({ ...event, seq: 0, total: 1, fallbackText: event.text });
       finishAudio({ ...event, total: 1 });
       break;
-    case "tts_end": finishAudio(event); break;
+    case "tts_end":
+      clearTimeout(state.completionTimer);
+      finishAudio(event);
+      break;
     case "busy": setBusy(true, event.message || "يوجد طلب قيد التنفيذ…"); break;
     case "message_persisted": {
       if (event.stay_id && state.currentStayId && event.stay_id !== state.currentStayId) break;

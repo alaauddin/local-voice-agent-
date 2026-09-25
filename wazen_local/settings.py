@@ -70,7 +70,9 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
-WHITENOISE_MAX_AGE = 31536000
+# Module imports use stable relative URLs, so unhashed files must revalidate.
+# Manifest-hashed assets still receive WhiteNoise's immutable long-term cache.
+WHITENOISE_MAX_AGE = 60
 WHITENOISE_MANIFEST_STRICT = False
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

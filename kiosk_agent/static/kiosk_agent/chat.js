@@ -10,7 +10,7 @@ import {
   loadRemotes, bindRemotesUi, startRemotesRefresh,
 } from "./js/remotes.js?v=remote-popup-1";
 import {
-  setAvatar, preloadAvatarVideos, setMessagesOpen, updateControls,
+  setAvatar, preloadAvatarVideos, setMessagesOpen, updateControls, setBusy,
   cancelAutoStart, scheduleAutoRealtime, setConnection, loadMemory,
   avatarObjectUrls,
 } from "./js/ui.js";
@@ -24,6 +24,32 @@ import {
 import { submitMessage, resizeInput, populateVoices, resetStay } from "./js/actions.js";
 
 bindRemotesUi();
+
+let welcomeWaitStartedAt = 0;
+window.setInterval(() => {
+  const waitingForWelcome = state.busy
+    && el.voiceStatus.textContent === "يحضّر الترحيب الصوتي…";
+  if (!waitingForWelcome) {
+    welcomeWaitStartedAt = 0;
+    return;
+  }
+  if (!welcomeWaitStartedAt) {
+    welcomeWaitStartedAt = Date.now();
+    return;
+  }
+  if (Date.now() - welcomeWaitStartedAt < 8000) return;
+  welcomeWaitStartedAt = 0;
+  clearTimeout(state.completionTimer);
+  setBusy(false);
+  setAvatar("speaking");
+  el.voiceStatus.textContent = `${state.persona} يرحّب بك…`;
+  speakBrowser("أهلاً وسهلاً، أنا معك. تفضل.", () => {
+    if (!state.conversationActive || state.busy) return;
+    setAvatar("idle");
+    el.voiceStatus.textContent = "تفضل… أنا أستمع";
+    startRecognition("command");
+  }, true);
+}, 500);
 
 el.form.addEventListener("submit", (event) => { event.preventDefault(); submitMessage(el.input.value); });
 document.addEventListener("pointerdown", unlockAudio, { once: true, passive: true });

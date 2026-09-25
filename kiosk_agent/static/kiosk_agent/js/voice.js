@@ -188,4 +188,3 @@ export function toggleWakeWord() {
   }
   updateControls();
 }
-
