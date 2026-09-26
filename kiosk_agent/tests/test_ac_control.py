@@ -4,17 +4,22 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from kiosk_agent.ac_control import ACControlError, accept_esp32_state_sync, set_ac_state
+from kiosk_agent.ac_control import (
+    ACControlError,
+    accept_esp32_state_sync,
+    protocol_models,
+    set_ac_state,
+)
 from kiosk_agent.models import ACState, RemoteControl
 
 
-def confirmed_payload(*, temperature=22, version=1):
+def confirmed_payload(*, temperature=22, version=1, model="default"):
     return {
         "success": True,
         "source": "esp32",
         "brand": "gree",
         "protocol": "gree",
-        "model": "default",
+        "model": model,
         "state_version": version,
         "updated_at": 1234,
         "state": {
@@ -51,6 +56,21 @@ class ACControlTests(TestCase):
         )
         self.state = ACState.objects.create(device=self.device)
 
+    def test_all_firmware_model_variants_are_exposed_by_protocol(self):
+        self.assertEqual(protocol_models("gree"), ("yaw1f", "ybofb", "yx1fsf"))
+        for protocol in ("haier_ac_yrw02", "haier_ac176"):
+            self.assertEqual(protocol_models(protocol), ("v9014557_a", "v9014557_b"))
+        self.assertEqual(protocol_models("haier_ac"), ("default",))
+        self.assertEqual(protocol_models("haier_ac160"), ("default",))
+        self.assertEqual(protocol_models("midea"), ("default",))
+        self.assertEqual(protocol_models("kelon168"), ("dg11r2-01",))
+
+    def test_cross_protocol_model_is_rejected_before_transmission(self):
+        self.device.protocol_model = RemoteControl.ProtocolModel.HAIER_V9014557_B
+        self.device.save(update_fields=("protocol_model", "updated_at"))
+        with self.assertRaisesMessage(ACControlError, "not supported by this AC protocol"):
+            set_ac_state(self.device.pk, {"power": True})
+
     @patch("kiosk_agent.ac_control.httpx.Client")
     def test_django_saves_only_confirmed_esp32_state(self, client_cls):
         response = type("Response", (), {})()
@@ -79,6 +99,20 @@ class ACControlTests(TestCase):
             "quiet is not supported by the selected protocol",
         ):
             set_ac_state(self.device.pk, {"quiet": True})
+
+    @patch("kiosk_agent.ac_control.httpx.Client")
+    def test_selected_gree_model_variant_is_sent_and_verified(self, client_cls):
+        self.device.protocol_model = RemoteControl.ProtocolModel.GREE_YX1FSF
+        self.device.save(update_fields=("protocol_model", "updated_at"))
+        response = type("Response", (), {})()
+        response.status_code = 200
+        response.json = lambda: confirmed_payload(model="yx1fsf")
+        client_cls.return_value.__enter__.return_value.post.return_value = response
+
+        set_ac_state(self.device.pk, {"power": True})
+
+        sent = client_cls.return_value.__enter__.return_value.post.call_args.kwargs["json"]
+        self.assertEqual(sent["model"], "yx1fsf")
 
     @patch("kiosk_agent.ac_control.httpx.Client")
     def test_failed_transmission_does_not_change_django_state(self, client_cls):
@@ -199,7 +233,10 @@ class ACRemoteAdminTests(TestCase):
         self.assertTrue(ACState.objects.filter(device=remote).exists())
         self.assertEqual(remote.brand, RemoteControl.Brand.HAIER)
         self.assertEqual(remote.protocol, RemoteControl.Protocol.HAIER_AC_YRW02)
-        self.assertEqual(remote.protocol_model, RemoteControl.ProtocolModel.DEFAULT)
+        self.assertEqual(
+            remote.protocol_model,
+            RemoteControl.ProtocolModel.HAIER_V9014557_A,
+        )
 
     def test_ac_creation_explains_missing_configuration(self):
         response = self.client.post(

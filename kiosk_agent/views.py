@@ -25,8 +25,11 @@ from .ac_control import (
     AC_PROTOCOL_CONFIG,
     AC_STATE_FIELDS,
     accept_esp32_state_sync,
+    is_protocol_model_supported,
+    normalize_protocol_model,
     protocol_capabilities,
     protocol_defaults,
+    protocol_models,
     serialize_ac_state,
     set_ac_state,
 )
@@ -113,10 +116,11 @@ def button_config_data_view(request, remote_id):
     ac_config = None
     if remote.device_type == RemoteControl.DeviceType.AC:
         state, _ = ACState.objects.get_or_create(device=remote)
+        normalized_model = normalize_protocol_model(remote.protocol, remote.protocol_model)
         ac_config = {
             "protocol": remote.protocol,
             "brand": remote.brand,
-            "model": remote.protocol_model,
+            "model": normalized_model,
             "state": serialize_ac_state(state),
             "state_version": state.state_version,
             "visibility": {
@@ -131,6 +135,13 @@ def button_config_data_view(request, remote_id):
                     "brand_label": RemoteControl.Brand(protocol_defaults(value)[0]).label,
                     "model": protocol_defaults(value)[1],
                     "model_label": RemoteControl.ProtocolModel(protocol_defaults(value)[1]).label,
+                    "models": [
+                        {
+                            "value": model,
+                            "label": RemoteControl.ProtocolModel(model).label,
+                        }
+                        for model in protocol_models(value)
+                    ],
                     "capabilities": protocol_capabilities(value),
                 }
                 for value, label in RemoteControl.Protocol.choices
@@ -239,6 +250,13 @@ def button_config_save_view(request, remote_id):
             protocol = remote_settings.get("protocol")
             if protocol not in AC_PROTOCOL_CONFIG:
                 return JsonResponse({"detail": "Choose a supported AC protocol."}, status=400)
+            protocol_model = str(remote_settings.get("protocol_model", ""))
+            protocol_model = normalize_protocol_model(protocol, protocol_model)
+            if not is_protocol_model_supported(protocol, protocol_model):
+                return JsonResponse(
+                    {"detail": "Choose a model supported by the selected AC protocol."},
+                    status=400,
+                )
             visibility = remote_settings.get("ac_control_visibility", {})
             if (
                 not isinstance(visibility, dict)
@@ -248,6 +266,7 @@ def button_config_save_view(request, remote_id):
                 return JsonResponse({"detail": "Invalid AC control visibility settings."}, status=400)
         else:
             protocol = ""
+            protocol_model = ""
             visibility = {}
         existing = list(remote.buttons.select_for_update())
         existing_by_id = {button.pk: button for button in existing}
@@ -319,7 +338,8 @@ def button_config_save_view(request, remote_id):
             setattr(remote, field, remote_settings[field])
         remote.device_name = remote_settings["device_name"].strip()
         remote.protocol = protocol
-        remote.brand, remote.protocol_model = protocol_defaults(protocol)
+        remote.brand = protocol_defaults(protocol)[0]
+        remote.protocol_model = protocol_model
         remote.ac_control_visibility = visibility
         remote.save(
             update_fields=(

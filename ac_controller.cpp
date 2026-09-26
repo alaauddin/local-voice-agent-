@@ -108,13 +108,22 @@ stdAc::state_t commonState(
 }
 
 int16_t greeModel(const String& model) {
-  if (sameText(model, "ybofb")) return 2;
-  if (sameText(model, "yx1fsf")) return 3;
-  return 1;
+  if (sameText(model, "ybofb")) {
+    return static_cast<int16_t>(gree_ac_remote_model_t::YBOFB);
+  }
+  if (sameText(model, "yx1fsf")) {
+    return static_cast<int16_t>(gree_ac_remote_model_t::YX1FSF);
+  }
+  // YAW1F and the legacy "default" value are model 1.
+  return static_cast<int16_t>(gree_ac_remote_model_t::YAW1F);
 }
 
 int16_t haierModel(const String& model) {
-  return sameText(model, "v9014557_b") ? 2 : 1;
+  return static_cast<int16_t>(
+    sameText(model, "v9014557_b")
+      ? haier_ac176_remote_model_t::V9014557_B
+      : haier_ac176_remote_model_t::V9014557_A
+  );
 }
 
 decode_type_t haierProtocol(const String& protocol) {
@@ -132,6 +141,51 @@ bool supportedProtocol(const String& protocol) {
     sameText(protocol, "haier_ac176") ||
     sameText(protocol, "midea") ||
     sameText(protocol, "kelon168");
+}
+
+bool isHaierProtocol(const String& protocol) {
+  return sameText(protocol, "haier_ac") ||
+    sameText(protocol, "haier_ac_yrw02") ||
+    sameText(protocol, "haier_ac160") ||
+    sameText(protocol, "haier_ac176");
+}
+
+bool isHaierVariantProtocol(const String& protocol) {
+  return sameText(protocol, "haier_ac_yrw02") ||
+    sameText(protocol, "haier_ac176");
+}
+
+bool supportedModel(const String& protocol, const String& model) {
+  if (sameText(protocol, "gree")) {
+    return sameText(model, "default") || sameText(model, "yaw1f") ||
+      sameText(model, "ybofb") || sameText(model, "yx1fsf");
+  }
+  if (isHaierVariantProtocol(protocol)) {
+    return sameText(model, "default") || sameText(model, "v9014557_a") ||
+      sameText(model, "v9014557_b");
+  }
+  if (sameText(protocol, "haier_ac") || sameText(protocol, "haier_ac160")) {
+    return sameText(model, "default");
+  }
+  if (sameText(protocol, "midea")) return sameText(model, "default");
+  if (sameText(protocol, "kelon168")) {
+    return sameText(model, "default") || sameText(model, "dg11r2-01");
+  }
+  return false;
+}
+
+bool supportedBrand(const String& protocol, const String& brand) {
+  if (sameText(protocol, "gree")) return sameText(brand, "gree");
+  if (isHaierProtocol(protocol)) return sameText(brand, "haier");
+  if (sameText(protocol, "midea")) return sameText(brand, "midea");
+  if (sameText(protocol, "kelon168")) return sameText(brand, "hisense");
+  return false;
+}
+
+bool supportedConfiguration(const ACDeviceConfig& config) {
+  return supportedProtocol(config.protocol) &&
+    supportedBrand(config.protocol, config.brand) &&
+    supportedModel(config.protocol, config.model);
 }
 
 ACCapabilities capabilitiesFor(const String& protocol) {
@@ -336,7 +390,7 @@ void ACController::loadState() {
   PersistedACState saved = {};
   const size_t bytes = preferences_.getBytes("state", &saved, sizeof(saved));
   preferences_.end();
-  configured_ = config_.brand.length() > 0 && supportedProtocol(config_.protocol);
+  configured_ = supportedConfiguration(config_);
   if (!configured_ || bytes != sizeof(saved) || saved.schema != AC_PERSISTENCE_SCHEMA ||
       saved.mode > static_cast<uint8_t>(ACMode::FAN) ||
       saved.fan > static_cast<uint8_t>(ACFan::HIGH_SPEED)) return;
@@ -450,8 +504,8 @@ bool ACController::applyPatch(
   bool hasRequestedVersion,
   String& error
 ) {
-  if (!supportedProtocol(config.protocol) || config.brand.length() == 0 || config.model.length() == 0) {
-    error = "brand, protocol, and model must describe a supported AC";
+  if (!supportedConfiguration(config)) {
+    error = "brand, protocol, and model combination is not supported";
     return false;
   }
   if (hasRequestedVersion && requestedVersion < runtime_.stateVersion) {
@@ -515,4 +569,22 @@ void ACController::writeCapabilities(JsonObject target) const {
   target["quiet"] = caps.quiet;
   target["light"] = caps.light;
   target["x_fan"] = caps.xFan;
+}
+
+void ACController::writeSupportedModels(JsonArray target) const {
+  if (sameText(config_.protocol, "gree")) {
+    target.add("yaw1f");
+    target.add("ybofb");
+    target.add("yx1fsf");
+  } else if (isHaierVariantProtocol(config_.protocol)) {
+    target.add("v9014557_a");
+    target.add("v9014557_b");
+  } else if (sameText(config_.protocol, "haier_ac") ||
+             sameText(config_.protocol, "haier_ac160")) {
+    target.add("default");
+  } else if (sameText(config_.protocol, "kelon168")) {
+    target.add("dg11r2-01");
+  } else if (sameText(config_.protocol, "midea")) {
+    target.add("default");
+  }
 }

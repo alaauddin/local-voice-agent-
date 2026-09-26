@@ -30,6 +30,7 @@ const manualKeyField = document.querySelector("#manualKeyField");
 const acProtocol = document.querySelector("#acProtocol");
 const acBrand = document.querySelector("#acBrand");
 const acModel = document.querySelector("#acModel");
+const acModelLabel = document.querySelector("#acModelLabel");
 const acStateVersion = document.querySelector("#acStateVersion");
 const acConnectionBadge = document.querySelector("#acConnectionBadge");
 const acVisibilityContainer = document.querySelector("#acVisibility");
@@ -141,6 +142,10 @@ function selectedProtocol() {
   return acConfig?.protocols?.find((item) => item.value === acProtocol.value) || null;
 }
 
+function selectedACModel() {
+  return selectedProtocol()?.models?.find((item) => item.value === acModel.value) || null;
+}
+
 function setACTestStatus(message, kind = "") {
   acTestStatus.textContent = message;
   acTestStatus.className = kind;
@@ -149,9 +154,17 @@ function setACTestStatus(message, kind = "") {
 function renderAC() {
   if (!isACRemote() || !acConfig) return;
   const protocol = selectedProtocol();
+  if (acModel.dataset.protocol !== acProtocol.value) {
+    const preferred = acModel.dataset.protocol ? protocol?.model : acConfig.model;
+    acModel.replaceChildren();
+    (protocol?.models || []).forEach((item) => acModel.add(new Option(item.label, item.value)));
+    const hasPreferred = (protocol?.models || []).some((item) => item.value === preferred);
+    acModel.value = hasPreferred ? preferred : (protocol?.model || "");
+    acModel.dataset.protocol = acProtocol.value;
+  }
   acCapabilities = protocol?.capabilities || {};
   acBrand.textContent = protocol?.brand_label || "—";
-  acModel.textContent = protocol?.model_label || "—";
+  acModelLabel.textContent = selectedACModel()?.label || "—";
   acStateVersion.textContent = String(acConfig.state_version || 0);
   acConnectionBadge.textContent = activeRemote.device_ip ? `متصل: ${activeRemote.device_ip}` : "غير متصل";
   acConnectionBadge.classList.toggle("connected", Boolean(activeRemote.device_ip));
@@ -361,6 +374,7 @@ async function loadRemote() {
     acProtocol.replaceChildren(new Option("اختر البروتوكول…", ""));
     acConfig.protocols.forEach((item) => acProtocol.add(new Option(item.label, item.value)));
     acProtocol.value = acConfig.protocol || "";
+    acModel.dataset.protocol = "";
     renderAC();
   }
   setStatus("");
@@ -568,6 +582,7 @@ async function saveLayout(reload = true) {
         guest_visible: remoteGuestVisible.checked,
         voice_enabled: remoteVoiceEnabled.checked,
         protocol: isACRemote() ? acProtocol.value : "",
+        protocol_model: isACRemote() ? acModel.value : "",
         ac_control_visibility: isACRemote() ? acVisibility : {},
       },
       buttons: payloadButtons(),
@@ -717,6 +732,11 @@ saveButton.addEventListener("click", () => saveLayout());
 captureButton.addEventListener("click", startCapture);
 
 acProtocol.addEventListener("change", () => {
+  acModel.dataset.protocol = acProtocol.value ? "__changing__" : "";
+  markDirty();
+  renderAC();
+});
+acModel.addEventListener("change", () => {
   markDirty();
   renderAC();
 });

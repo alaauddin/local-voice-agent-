@@ -254,6 +254,7 @@ class RemoteControlAdminForm(forms.ModelForm):
             "device_ip",
             "device_type",
             "protocol",
+            "protocol_model",
             "template",
             "template_slug",
             "is_active",
@@ -269,6 +270,7 @@ class RemoteControlAdminForm(forms.ModelForm):
         help_texts = {
             "device_type": "Choose Air conditioner for state-based Gree, Haier, Midea, or Hisense control. Choose Raw IR for TVs, fans, and learned remotes.",
             "protocol": "Choose the IR protocol. Brand and model are selected automatically.",
+            "protocol_model": "Choose the remote/model variant used by this protocol.",
             "guest_visible": "Show this remote to guests on the kiosk.",
             "voice_enabled": "Allow voice commands to control this remote.",
         }
@@ -282,6 +284,7 @@ class RemoteControlAdminForm(forms.ModelForm):
         cleaned_data = super().clean()
         if cleaned_data.get("device_type") != RemoteControl.DeviceType.AC:
             cleaned_data["protocol"] = ""
+            cleaned_data["protocol_model"] = ""
             self.instance.brand = ""
             self.instance.protocol = ""
             self.instance.protocol_model = ""
@@ -296,9 +299,24 @@ class RemoteControlAdminForm(forms.ModelForm):
                 self.add_error(field, message)
         protocol = cleaned_data.get("protocol")
         if protocol:
-            from .ac_control import protocol_defaults
+            from .ac_control import (
+                is_protocol_model_supported,
+                normalize_protocol_model,
+                protocol_defaults,
+            )
 
-            self.instance.brand, self.instance.protocol_model = protocol_defaults(protocol)
+            model = normalize_protocol_model(
+                protocol,
+                str(cleaned_data.get("protocol_model") or ""),
+            )
+            if not is_protocol_model_supported(protocol, model):
+                self.add_error(
+                    "protocol_model",
+                    "This model is not supported by the selected AC protocol.",
+                )
+            cleaned_data["protocol_model"] = model
+            self.instance.brand = protocol_defaults(protocol)[0]
+            self.instance.protocol_model = model
         return cleaned_data
 
 
@@ -401,10 +419,10 @@ class RemoteControlAdmin(admin.ModelAdmin):
             "Air-conditioner configuration",
             {
                 "fields": (
-                    "protocol",
+                    ("protocol", "protocol_model"),
                 ),
                 "classes": ("ac-config",),
-                "description": "Choose only the protocol. Django automatically selects its brand, model, and supported controls.",
+                "description": "Choose the protocol and its matching remote/model variant. Django selects the brand and supported controls.",
             },
         ),
         (

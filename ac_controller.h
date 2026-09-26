@@ -83,6 +83,7 @@ class ACController {
   void writeState(JsonObject target, const ACState& state) const;
   void writeController(JsonObject target) const;
   void writeCapabilities(JsonObject target) const;
+  void writeSupportedModels(JsonArray target) const;
 
  private:
   const uint8_t* outputPins_;

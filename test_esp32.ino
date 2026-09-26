@@ -43,7 +43,7 @@ const char* DEVICE_NAME = "ESP32 IR Controller";
 const char* DEVICE_TYPE = "esp32";
 const char* DEVICE_HOSTNAME = "esp32-ir-controller";
 const char* DEVICE_MANUFACTURER = "Espressif";
-const char* FIRMWARE_VERSION = "1.3.0";
+const char* FIRMWARE_VERSION = "1.4.0";
 const char* IDENTITY_PROTOCOL = "wazen-device-identity/1";
 
 
@@ -1432,6 +1432,8 @@ void handleIdentity() {
 
   capabilities.add("ac_control");
 
+  capabilities.add("ac_model_variants");
+
   capabilities.add("ir_capture_api");
 
 
@@ -2024,6 +2026,8 @@ void handleGetACCapabilities() {
   for (size_t i = 0; i < IR_SEND_PIN_COUNT; i++) outputs.add(IR_SEND_PINS[i]);
   JsonObject capabilities = doc["capabilities"].to<JsonObject>();
   acController.writeCapabilities(capabilities);
+  JsonArray supportedModels = doc["supported_models"].to<JsonArray>();
+  acController.writeSupportedModels(supportedModels);
   sendJsonDocument(200, doc);
 }
 

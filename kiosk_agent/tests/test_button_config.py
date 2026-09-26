@@ -286,6 +286,10 @@ class ButtonConfigTests(TestCase):
         self.assertTrue(any(item["value"] == "gree" for item in data["ac"]["protocols"]))
         gree = next(item for item in data["ac"]["protocols"] if item["value"] == "gree")
         self.assertTrue(gree["capabilities"]["turbo"])
+        self.assertEqual(
+            [model["value"] for model in gree["models"]],
+            ["yaw1f", "ybofb", "yx1fsf"],
+        )
 
         save_response = self.client.post(
             reverse("button-config-save", args=[ac_remote.pk]),
@@ -297,6 +301,7 @@ class ButtonConfigTests(TestCase):
                         "guest_visible": True,
                         "voice_enabled": False,
                         "protocol": "gree",
+                        "protocol_model": "ybofb",
                         "ac_control_visibility": {"power": False, "temperature": True},
                     },
                     "buttons": [],
@@ -308,11 +313,40 @@ class ButtonConfigTests(TestCase):
         ac_remote.refresh_from_db()
         self.assertEqual(ac_remote.protocol, RemoteControl.Protocol.GREE)
         self.assertEqual(ac_remote.brand, RemoteControl.Brand.GREE)
-        self.assertEqual(ac_remote.protocol_model, RemoteControl.ProtocolModel.DEFAULT)
+        self.assertEqual(ac_remote.protocol_model, RemoteControl.ProtocolModel.GREE_YBOFB)
         self.assertFalse(ac_remote.ac_control_visibility["power"])
         public_data = RemoteControlPublicSerializer(ac_remote).data
         self.assertFalse(public_data["ac_capabilities"]["power"])
         self.assertTrue(public_data["ac_capabilities"]["temperature"])
+
+    def test_ac_remote_rejects_model_from_another_protocol(self):
+        ac_remote = RemoteControl.objects.create(
+            name="Invalid model AC",
+            slug="invalid-model-ac",
+            device_type=RemoteControl.DeviceType.AC,
+            device_name="Invalid Model ESP32",
+        )
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse("button-config-save", args=[ac_remote.pk]),
+            data=json.dumps(
+                {
+                    "remote": {
+                        "device_name": "Invalid Model ESP32",
+                        "is_active": True,
+                        "guest_visible": True,
+                        "voice_enabled": False,
+                        "protocol": "gree",
+                        "protocol_model": "v9014557_b",
+                        "ac_control_visibility": {},
+                    },
+                    "buttons": [],
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("model", response.json()["detail"].lower())
 
     @patch("kiosk_agent.views.set_ac_state")
     def test_staff_can_send_ac_test_state(self, set_state):

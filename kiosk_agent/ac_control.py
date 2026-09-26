@@ -39,7 +39,12 @@ BOOLEAN_FIELDS = {
 AC_PROTOCOL_CONFIG = {
     RemoteControl.Protocol.GREE: {
         "brand": RemoteControl.Brand.GREE,
-        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "model": RemoteControl.ProtocolModel.GREE_YAW1F,
+        "models": (
+            RemoteControl.ProtocolModel.GREE_YAW1F,
+            RemoteControl.ProtocolModel.GREE_YBOFB,
+            RemoteControl.ProtocolModel.GREE_YX1FSF,
+        ),
         "features": {
             "swing_vertical", "swing_horizontal", "turbo", "sleep",
             "eco", "light", "x_fan",
@@ -50,13 +55,18 @@ AC_PROTOCOL_CONFIG = {
     RemoteControl.Protocol.HAIER_AC: {
         "brand": RemoteControl.Brand.HAIER,
         "model": RemoteControl.ProtocolModel.DEFAULT,
+        "models": (RemoteControl.ProtocolModel.DEFAULT,),
         "features": {"swing_vertical", "sleep"},
         "temperature_min": 16,
         "temperature_max": 30,
     },
     RemoteControl.Protocol.HAIER_AC_YRW02: {
         "brand": RemoteControl.Brand.HAIER,
-        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "model": RemoteControl.ProtocolModel.HAIER_V9014557_A,
+        "models": (
+            RemoteControl.ProtocolModel.HAIER_V9014557_A,
+            RemoteControl.ProtocolModel.HAIER_V9014557_B,
+        ),
         "features": {
             "swing_vertical", "swing_horizontal", "turbo", "sleep", "quiet",
         },
@@ -66,6 +76,7 @@ AC_PROTOCOL_CONFIG = {
     RemoteControl.Protocol.HAIER_AC160: {
         "brand": RemoteControl.Brand.HAIER,
         "model": RemoteControl.ProtocolModel.DEFAULT,
+        "models": (RemoteControl.ProtocolModel.DEFAULT,),
         "features": {
             "swing_vertical", "turbo", "sleep", "quiet", "light", "x_fan",
         },
@@ -74,7 +85,11 @@ AC_PROTOCOL_CONFIG = {
     },
     RemoteControl.Protocol.HAIER_AC176: {
         "brand": RemoteControl.Brand.HAIER,
-        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "model": RemoteControl.ProtocolModel.HAIER_V9014557_A,
+        "models": (
+            RemoteControl.ProtocolModel.HAIER_V9014557_A,
+            RemoteControl.ProtocolModel.HAIER_V9014557_B,
+        ),
         "features": {
             "swing_vertical", "swing_horizontal", "turbo", "sleep", "quiet",
         },
@@ -84,6 +99,7 @@ AC_PROTOCOL_CONFIG = {
     RemoteControl.Protocol.MIDEA: {
         "brand": RemoteControl.Brand.MIDEA,
         "model": RemoteControl.ProtocolModel.DEFAULT,
+        "models": (RemoteControl.ProtocolModel.DEFAULT,),
         "features": {
             "swing_vertical", "turbo", "sleep", "eco", "quiet", "light", "x_fan",
         },
@@ -92,7 +108,8 @@ AC_PROTOCOL_CONFIG = {
     },
     RemoteControl.Protocol.KELON168: {
         "brand": RemoteControl.Brand.HISENSE,
-        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "model": RemoteControl.ProtocolModel.HISENSE_DG11R201,
+        "models": (RemoteControl.ProtocolModel.HISENSE_DG11R201,),
         "features": {"swing_vertical", "turbo", "sleep", "light"},
         "temperature_min": 16,
         "temperature_max": 32,
@@ -105,6 +122,28 @@ def protocol_defaults(protocol: str) -> tuple[str, str]:
     if not config:
         return "", ""
     return str(config["brand"]), str(config["model"])
+
+
+def protocol_models(protocol: str) -> tuple[str, ...]:
+    config = AC_PROTOCOL_CONFIG.get(protocol)
+    if not config:
+        return ()
+    return tuple(str(model) for model in config["models"])
+
+
+def normalize_protocol_model(protocol: str, model: str) -> str:
+    models = protocol_models(protocol)
+    if model in models:
+        return model
+    # Older installations stored "default" before explicit variants were
+    # exposed. Treat that value as the protocol's first/default model.
+    if model in ("", str(RemoteControl.ProtocolModel.DEFAULT)):
+        return protocol_defaults(protocol)[1]
+    return model
+
+
+def is_protocol_model_supported(protocol: str, model: str) -> bool:
+    return normalize_protocol_model(protocol, model) in protocol_models(protocol)
 
 
 def protocol_capabilities(protocol: str) -> dict:
@@ -215,6 +254,14 @@ def set_ac_state(device_id: int, changes: dict, *, request_id: str | None = None
         raise ACControlError("wrong_type", "Device is not configured as an AC.")
     if not all((device.device_name, device.brand, device.protocol, device.protocol_model)):
         raise ACControlError("unconfigured", "Complete the AC controller, brand, protocol, and model settings.")
+    if (
+        device.protocol not in AC_PROTOCOL_CONFIG
+        or not is_protocol_model_supported(device.protocol, device.protocol_model)
+    ):
+        raise ACControlError(
+            "unconfigured",
+            "The selected model is not supported by this AC protocol.",
+        )
 
     changes = _validate_state_values(dict(changes))
     state, _ = ACState.objects.select_for_update().get_or_create(device=device)
