@@ -10,7 +10,7 @@
 
 #include <ArduinoJson.h>
 
-#include "ac_controller.h"a
+#include "ac_controller.h"
 
 
 
@@ -36,6 +36,7 @@
 
 
 const char* WIFI_SSID = "ala";
+// Use an empty string for an open Wi-Fi network: ""
 const char* WIFI_PASSWORD = "alauddin";
 
 const char* DEVICE_NAME = "ESP32 IR Controller";
@@ -2686,13 +2687,23 @@ void startWiFiAttempt() {
 
 
 
-  WiFi.begin(
+  if (strlen(WIFI_PASSWORD) == 0) {
 
-    WIFI_SSID,
+    Serial.println("Connecting without a WiFi password (open network)");
 
-    WIFI_PASSWORD
+    WiFi.begin(WIFI_SSID);
 
-  );
+  } else {
+
+    WiFi.begin(
+
+      WIFI_SSID,
+
+      WIFI_PASSWORD
+
+    );
+
+  }
 
 
 

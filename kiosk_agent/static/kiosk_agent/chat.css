@@ -1438,3 +1438,488 @@ dialog.remote-popup-dialog {
 
   .remotes-panel { max-width: 900px; }
 }
+
+/* Physical remote experience */
+.ac-remote-slide {
+  background:
+    linear-gradient(100deg, rgba(255,255,255,.055), transparent 18%),
+    linear-gradient(155deg, #243a39, #132725 78%);
+}
+
+.ac-state {
+  padding: 11px;
+  gap: 11px;
+  background: linear-gradient(150deg, rgba(10,25,24,.76), rgba(5,16,15,.58));
+  border-color: rgba(159,216,208,.14);
+  border-radius: 24px;
+  box-shadow: inset 0 1px rgba(255,255,255,.05), 0 12px 24px rgba(0,0,0,.13);
+}
+
+.ac-lcd {
+  min-height: 116px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "status temperature"
+    "details details";
+  align-items: center;
+  gap: 8px 14px;
+  color: #1c3b36;
+  background:
+    repeating-linear-gradient(0deg, rgba(33,72,64,.025) 0 1px, transparent 1px 3px),
+    linear-gradient(145deg, #d9ead3, #aecbbf);
+  border: 2px solid #243c38;
+  border-radius: 15px;
+  box-shadow: inset 0 2px 8px rgba(17,52,45,.24), 0 2px 0 rgba(255,255,255,.08);
+}
+
+.ac-lcd-status {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ac-lcd-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  background: #738c84;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.25);
+}
+
+.ac-state[data-power="on"] .ac-lcd-dot {
+  background: #159b62;
+  box-shadow: 0 0 0 3px rgba(21,155,98,.13), 0 0 8px rgba(21,155,98,.45);
+}
+
+.ac-power,
+.ac-power.is-on,
+.ac-power.is-off {
+  padding: 0;
+  color: #34574f;
+  background: transparent;
+  border: 0;
+  font-size: 10px;
+}
+
+.ac-state[data-power="on"] .ac-power { color: #126b4a; }
+
+.ac-lcd-temperature {
+  grid-area: temperature;
+  direction: ltr;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  color: #183b34;
+}
+
+.ac-lcd-temperature .ac-temperature {
+  color: inherit;
+  font: 700 40px/.9 Arial, sans-serif;
+  letter-spacing: -2px;
+}
+
+.ac-lcd-temperature > span {
+  margin: 1px 0 0 3px;
+  font: 700 12px/1 Arial, sans-serif;
+}
+
+.ac-lcd-details {
+  grid-area: details;
+  padding-top: 8px;
+  border-top: 1px solid rgba(28,59,54,.17);
+}
+
+.ac-lcd-details .ac-state-item {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: transparent;
+  border-radius: 0;
+}
+
+.ac-lcd-details .ac-state-item small,
+.ac-lcd-details .ac-state-item strong {
+  color: #34574f;
+  font-size: 8px;
+}
+
+.ac-lcd-details .ac-state-item strong { color: #183b34; font-size: 9px; }
+
+.ac-control-deck {
+  gap: 10px;
+  padding: 2px 2px 4px;
+}
+
+.ac-primary-controls {
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+}
+
+.ac-control-power {
+  width: 54px;
+  height: 54px;
+  min-height: 54px;
+  align-self: end;
+  color: #fff;
+  background: linear-gradient(145deg, #f05c55, #a82526);
+  border: 1px solid rgba(255,174,168,.5);
+  border-radius: 50%;
+  box-shadow: 0 6px 13px rgba(77,8,10,.38), inset 0 1px rgba(255,255,255,.3);
+}
+
+.ac-control-power.is-active {
+  color: #fff;
+  background: linear-gradient(145deg, #3cc184, #14714d);
+  border-color: rgba(139,240,191,.5);
+  box-shadow: 0 0 0 3px rgba(55,193,130,.12), 0 6px 13px rgba(4,57,36,.38);
+}
+
+.ac-control-power .ac-control-icon { font-size: 20px; }
+.ac-control-power .ac-control-label { font-size: 7px; }
+
+.ac-temperature-control { min-width: 0; display: grid; gap: 5px; }
+.ac-group-label {
+  color: #8fa9a5;
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.ac-temperature-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.ac-control {
+  min-height: 40px;
+  padding: 7px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #e4eeec;
+  background: linear-gradient(145deg, #3d5753, #223b38);
+  border-color: rgba(255,255,255,.1);
+  border-radius: 13px;
+  box-shadow: 0 5px 11px rgba(1,12,11,.3), inset 0 1px rgba(255,255,255,.08);
+  font-size: 8px;
+}
+
+.ac-control-icon {
+  min-width: 17px;
+  color: #a9ccc6;
+  font: 700 15px/1 Arial, sans-serif;
+  text-align: center;
+}
+
+.ac-control-label { min-width: 0; line-height: 1.35; }
+
+.ac-control-cooler {
+  background: linear-gradient(145deg, #397da3, #20506d);
+  border-color: rgba(127,207,247,.24);
+}
+.ac-control-cooler .ac-control-icon { color: #c4ecff; }
+
+.ac-control-warmer {
+  background: linear-gradient(145deg, #ba7137, #78401e);
+  border-color: rgba(255,193,126,.24);
+}
+.ac-control-warmer .ac-control-icon { color: #ffe0b5; }
+
+.ac-cycle-controls { gap: 8px; }
+.ac-control-mode,
+.ac-control-fan {
+  min-height: 46px;
+  justify-content: flex-start;
+  padding-inline: 12px;
+}
+.ac-control-mode::before,
+.ac-control-fan::before {
+  color: #8fa9a5;
+  font-size: 7px;
+}
+.ac-control-mode::before { content: "الوضع"; margin-left: auto; }
+.ac-control-fan::before { content: "المروحة"; margin-left: auto; }
+.ac-control-mode .ac-control-icon { color: #9eddf2; }
+.ac-control-fan .ac-control-icon { color: #a8dfd6; }
+
+.ac-features-label {
+  padding: 2px 2px 0;
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+
+.ac-feature-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.ac-feature-controls .ac-control {
+  min-height: 43px;
+  flex-direction: column;
+  gap: 4px;
+  color: #aebfbc;
+  background: linear-gradient(145deg, #304744, #1d312f);
+}
+
+.ac-feature-controls .ac-control-icon { color: #8aa7a2; font-size: 14px; }
+.ac-feature-controls .ac-control.is-active {
+  color: #173a32;
+  background: linear-gradient(145deg, #9be3c7, #56b692);
+  border-color: rgba(194,255,228,.56);
+  box-shadow: 0 0 0 2px rgba(87,191,151,.12), 0 5px 12px rgba(3,50,34,.28);
+}
+.ac-feature-controls .ac-control.is-active .ac-control-icon { color: #14513f; }
+.ac-feature-turbo.is-active {
+  background: linear-gradient(145deg, #ffd279, #ee9c35) !important;
+  color: #533214 !important;
+}
+.ac-feature-turbo.is-active .ac-control-icon { color: #70420d !important; }
+.ac-feature-sleep.is-active {
+  background: linear-gradient(145deg, #acbaf0, #707fc3) !important;
+  color: #17234e !important;
+}
+
+.ac-control.sending { animation: acSending .8s ease-in-out infinite alternate; }
+.ac-control.error { background: #7b292b; border-color: #ff9b94; }
+
+.remote-feedback:not(:empty) {
+  padding: 8px 12px;
+  background: rgba(255,255,255,.055);
+  border-radius: 12px;
+}
+
+@keyframes acSending {
+  to { opacity: .62; transform: scale(.98); }
+}
+
+.remote-popup-content .ac-state {
+  width: min(430px, 100%);
+  margin-inline: auto;
+  padding: clamp(15px, 3vw, 24px);
+  border-radius: 34px;
+}
+.remote-popup-content .ac-lcd { min-height: 150px; padding: 18px 20px; }
+.remote-popup-content .ac-lcd-temperature .ac-temperature { font-size: 58px; }
+.remote-popup-content .ac-control { min-height: 54px; font-size: 11px; }
+.remote-popup-content .ac-control-power { width: 66px; height: 66px; min-height: 66px; }
+.remote-popup-content .ac-primary-controls { grid-template-columns: 70px minmax(0, 1fr); }
+.remote-popup-content .ac-feature-controls .ac-control { min-height: 60px; }
+.remote-popup-content .ac-control-icon { font-size: 19px; }
+
+@media (max-width: 600px) {
+  .ac-lcd { min-height: 130px; }
+  .remote-popup-content .ac-lcd { min-height: 140px; padding: 15px; }
+  .remote-popup-content .ac-lcd-temperature .ac-temperature { font-size: 48px; }
+  .remote-popup-content .ac-control { min-height: 48px; font-size: 9px; }
+  .remote-popup-content .ac-feature-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Remote polish: clearer actions, richer LCD, and feature-specific colors. */
+.ac-state {
+  background:
+    radial-gradient(circle at 50% -15%, rgba(85,159,148,.14), transparent 42%),
+    linear-gradient(155deg, #102a27, #071a18 76%);
+  border: 1px solid rgba(157,221,211,.18);
+  box-shadow:
+    inset 0 1px rgba(255,255,255,.07),
+    inset 0 -18px 35px rgba(0,0,0,.1),
+    0 16px 32px rgba(0,0,0,.18);
+}
+
+.ac-lcd {
+  grid-template-areas:
+    "status temperature"
+    "details details"
+    "features features";
+  background:
+    repeating-linear-gradient(0deg, rgba(23,61,53,.026) 0 1px, transparent 1px 3px),
+    radial-gradient(circle at 85% 15%, rgba(255,255,255,.42), transparent 30%),
+    linear-gradient(145deg, #e0eed8, #b2d0c3);
+  border-color: #294943;
+  box-shadow:
+    inset 0 2px 10px rgba(12,48,40,.28),
+    inset 0 0 0 1px rgba(255,255,255,.35),
+    0 0 0 4px rgba(0,0,0,.16),
+    0 8px 20px rgba(0,0,0,.18);
+}
+
+.ac-state[data-power="off"] .ac-lcd {
+  filter: saturate(.58);
+  opacity: .82;
+}
+
+.ac-lcd-features {
+  grid-area: features;
+  min-height: 19px;
+  padding-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #24574d;
+  border-top: 1px dashed rgba(28,59,54,.16);
+}
+
+.ac-lcd-features span {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: #1d5c4e;
+  background: rgba(28,92,78,.08);
+  border-radius: 6px;
+  font: 700 12px/1 Arial, sans-serif;
+}
+
+.ac-lcd-features .is-turbo { color: #a25a0e; background: rgba(212,125,31,.12); }
+.ac-lcd-features .is-sleep { color: #4e5ba1; background: rgba(78,91,161,.1); }
+.ac-lcd-features small { color: #57766f; font-size: 7px; }
+
+.ac-control-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.ac-control-copy small {
+  color: #8da7a2;
+  font-size: 6px;
+  font-weight: 500;
+}
+
+.ac-control-power .ac-control-copy { text-align: center; }
+.ac-control-power .ac-control-copy small { display: none; }
+
+.ac-control-power,
+.ac-control-power.is-active {
+  transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+}
+
+.ac-control-power.will-start,
+.ac-control-power.will-start.is-active {
+  color: #fff;
+  background: linear-gradient(145deg, #43cf8f, #13724d);
+  border-color: rgba(151,246,201,.56);
+  box-shadow: 0 0 0 3px rgba(55,193,130,.1), 0 7px 16px rgba(4,57,36,.42), inset 0 1px rgba(255,255,255,.3);
+}
+
+.ac-control-power.will-stop,
+.ac-control-power.will-stop.is-active {
+  color: #fff;
+  background: linear-gradient(145deg, #fa6b61, #a82427);
+  border-color: rgba(255,181,174,.62);
+  box-shadow: 0 0 0 3px rgba(231,75,70,.09), 0 7px 16px rgba(77,8,10,.44), inset 0 1px rgba(255,255,255,.3);
+}
+
+.ac-control-power:hover { filter: brightness(1.09); }
+.ac-control-power:active { transform: translateY(2px) scale(.96) !important; }
+
+.ac-control-mode::before,
+.ac-control-fan::before { content: none; }
+
+.ac-control-mode,
+.ac-control-fan {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.ac-control-mode .ac-control-icon,
+.ac-control-fan .ac-control-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: rgba(255,255,255,.075);
+  border-radius: 9px;
+}
+
+.ac-control-mode.mode-cool { border-color: rgba(90,191,231,.25); }
+.ac-control-mode.mode-cool .ac-control-icon { color: #8bdcf8; background: rgba(66,165,205,.12); }
+.ac-control-mode.mode-heat { border-color: rgba(242,160,65,.28); }
+.ac-control-mode.mode-heat .ac-control-icon { color: #ffc16e; background: rgba(222,128,32,.13); }
+.ac-control-mode.mode-dry .ac-control-icon { color: #73cee0; background: rgba(70,166,184,.12); }
+.ac-control-mode.mode-fan .ac-control-icon { color: #95decf; background: rgba(72,173,151,.12); }
+.ac-control-mode.mode-auto .ac-control-icon { color: #d6c6ff; background: rgba(140,113,199,.12); }
+
+.ac-feature-controls .ac-control {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.ac-feature-controls .ac-control::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  width: 5px;
+  height: 5px;
+  background: #667c78;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 1px rgba(0,0,0,.35);
+}
+
+.ac-feature-controls .ac-control.is-active::after {
+  background: #effff7;
+  box-shadow: 0 0 7px rgba(239,255,247,.8);
+}
+
+.ac-feature-swing_vertical.is-active,
+.ac-feature-swing_horizontal.is-active {
+  color: #103e42 !important;
+  background: linear-gradient(145deg, #8ee0db, #4aafaa) !important;
+}
+
+.ac-feature-eco.is-active {
+  color: #164124 !important;
+  background: linear-gradient(145deg, #a8e68e, #5eb96a) !important;
+}
+
+.ac-feature-quiet.is-active {
+  color: #24364d !important;
+  background: linear-gradient(145deg, #b9d1e2, #789bb8) !important;
+}
+
+.ac-feature-light.is-active {
+  color: #594316 !important;
+  background: linear-gradient(145deg, #ffe49a, #e8b84d) !important;
+}
+
+.ac-feature-x_fan.is-active {
+  color: #123d51 !important;
+  background: linear-gradient(145deg, #a7def0, #58a9c7) !important;
+}
+
+.ac-feature-controls .ac-control:last-child:nth-child(3n + 1) { grid-column: 2; }
+
+.ac-control:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.07);
+  box-shadow: 0 8px 16px rgba(1,12,11,.38), inset 0 1px rgba(255,255,255,.1);
+}
+
+.ac-control:active:not(:disabled) {
+  transform: translateY(1px) scale(.985);
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.24);
+}
+
+.remote-popup-content .ac-control-copy small { font-size: 8px; }
+.remote-popup-content .ac-control-label { font-size: 10px; font-weight: 600; }
+
+@media (max-width: 420px) {
+  .ac-state { padding: 9px; }
+  .ac-lcd { padding: 12px; }
+  .ac-primary-controls { grid-template-columns: 54px minmax(0, 1fr); gap: 7px; }
+  .ac-control-power { width: 52px; height: 52px; min-height: 52px; }
+  .ac-feature-controls { gap: 6px; }
+  .ac-feature-controls .ac-control { min-height: 49px; padding-inline: 3px; }
+}

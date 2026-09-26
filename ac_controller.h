@@ -5,7 +5,12 @@
 #include <Preferences.h>
 
 enum class ACMode : uint8_t { AUTO, COOL, HEAT, DRY, FAN };
-enum class ACFan : uint8_t { AUTO, LOW, MEDIUM, HIGH };
+enum class ACFan : uint8_t {
+  AUTO_SPEED,
+  LOW_SPEED,
+  MEDIUM_SPEED,
+  HIGH_SPEED
+};
 
 struct ACState {
   bool power;

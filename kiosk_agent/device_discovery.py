@@ -119,12 +119,23 @@ def _probe_identity(ip: str, timeout: float) -> dict | None:
     if not isinstance(device_type, str) or not device_type.strip():
         return None
 
+    raw_capabilities = payload.get("capabilities")
+    capabilities = []
+    if isinstance(raw_capabilities, list):
+        capabilities = [
+            value.strip()
+            for value in raw_capabilities
+            if isinstance(value, str) and value.strip()
+        ]
+
     identity = {
         "name": name.strip(),
         "type": device_type.strip(),
         "ip": ip,
         "device_id": str(payload.get("device_id") or "")[:120],
         "hostname": str(payload.get("hostname") or "")[:253],
+        "firmware_version": str(payload.get("firmware_version") or "")[:40],
+        "capabilities": capabilities,
     }
     logger.info(
         "Discovered identity device: ip=%s name=%s type=%s",

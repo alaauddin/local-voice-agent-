@@ -34,7 +34,7 @@ enum ACFlag : uint8_t {
 
 ACState defaultState() {
   return {
-    false, ACMode::COOL, 24, ACFan::AUTO,
+    false, ACMode::COOL, 24, ACFan::AUTO_SPEED,
     false, false, false, false, false, false, false, false
   };
 }
@@ -56,10 +56,10 @@ bool parseMode(const char* value, ACMode& result) {
 
 bool parseFan(const char* value, ACFan& result) {
   if (!value) return false;
-  if (!strcasecmp(value, "auto")) result = ACFan::AUTO;
-  else if (!strcasecmp(value, "low")) result = ACFan::LOW;
-  else if (!strcasecmp(value, "medium")) result = ACFan::MEDIUM;
-  else if (!strcasecmp(value, "high")) result = ACFan::HIGH;
+  if (!strcasecmp(value, "auto")) result = ACFan::AUTO_SPEED;
+  else if (!strcasecmp(value, "low")) result = ACFan::LOW_SPEED;
+  else if (!strcasecmp(value, "medium")) result = ACFan::MEDIUM_SPEED;
+  else if (!strcasecmp(value, "high")) result = ACFan::HIGH_SPEED;
   else return false;
   return true;
 }
@@ -76,9 +76,9 @@ stdAc::opmode_t commonMode(ACMode mode) {
 
 stdAc::fanspeed_t commonFan(ACFan fan) {
   switch (fan) {
-    case ACFan::LOW: return stdAc::fanspeed_t::kLow;
-    case ACFan::MEDIUM: return stdAc::fanspeed_t::kMedium;
-    case ACFan::HIGH: return stdAc::fanspeed_t::kHigh;
+    case ACFan::LOW_SPEED: return stdAc::fanspeed_t::kLow;
+    case ACFan::MEDIUM_SPEED: return stdAc::fanspeed_t::kMedium;
+    case ACFan::HIGH_SPEED: return stdAc::fanspeed_t::kHigh;
     default: return stdAc::fanspeed_t::kAuto;
   }
 }
@@ -293,9 +293,9 @@ const char* acModeName(ACMode mode) {
 
 const char* acFanName(ACFan fan) {
   switch (fan) {
-    case ACFan::LOW: return "low";
-    case ACFan::MEDIUM: return "medium";
-    case ACFan::HIGH: return "high";
+    case ACFan::LOW_SPEED: return "low";
+    case ACFan::MEDIUM_SPEED: return "medium";
+    case ACFan::HIGH_SPEED: return "high";
     default: return "auto";
   }
 }
@@ -339,7 +339,7 @@ void ACController::loadState() {
   configured_ = config_.brand.length() > 0 && supportedProtocol(config_.protocol);
   if (!configured_ || bytes != sizeof(saved) || saved.schema != AC_PERSISTENCE_SCHEMA ||
       saved.mode > static_cast<uint8_t>(ACMode::FAN) ||
-      saved.fan > static_cast<uint8_t>(ACFan::HIGH)) return;
+      saved.fan > static_cast<uint8_t>(ACFan::HIGH_SPEED)) return;
   const ACCapabilities caps = capabilities();
   if (saved.temperature < caps.minimumTemperature || saved.temperature > caps.maximumTemperature) return;
   ACState& state = runtime_.state;

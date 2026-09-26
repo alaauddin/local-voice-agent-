@@ -47,6 +47,33 @@ const AC_FEATURE_LABELS = {
   x_fan: "X-Fan",
 };
 
+const AC_FEATURE_ICONS = {
+  swing_vertical: "↕",
+  swing_horizontal: "↔",
+  turbo: "⚡",
+  sleep: "☾",
+  eco: "♧",
+  quiet: "◌",
+  light: "✦",
+  x_fan: "≋",
+};
+
+const AC_MODE_ICONS = {
+  auto: "A",
+  cool: "❄",
+  heat: "☀",
+  dry: "💧",
+  fan: "≋",
+};
+
+const AC_MODE_COLORS = {
+  auto: "auto",
+  cool: "cool",
+  heat: "heat",
+  dry: "dry",
+  fan: "fan",
+};
+
 const AC_MODES = Object.keys(AC_MODE_LABELS);
 const AC_FANS = Object.keys(AC_FAN_LABELS);
 const remotePopupDialog = document.querySelector("#remotePopupDialog");
@@ -116,52 +143,105 @@ function acControl(label, field, options = {}) {
   button.className = `ac-control ${options.className || ""}`.trim();
   button.dataset.field = field;
   if (options.action) button.dataset.action = options.action;
-  button.textContent = label;
+  if (options.icon) {
+    const icon = document.createElement("span");
+    icon.className = "ac-control-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = options.icon;
+    button.appendChild(icon);
+  }
+  const copy = document.createElement("span");
+  copy.className = "ac-control-copy";
+  if (options.kicker) {
+    const kicker = document.createElement("small");
+    kicker.textContent = options.kicker;
+    copy.appendChild(kicker);
+  }
+  const text = document.createElement("span");
+  text.className = "ac-control-label";
+  text.textContent = label;
+  copy.appendChild(text);
+  button.appendChild(copy);
   button.setAttribute("aria-label", options.ariaLabel || label);
   button.classList.toggle("is-active", Boolean(options.active));
+  if (options.action === "toggle") {
+    button.setAttribute("aria-pressed", String(Boolean(options.active)));
+  }
   return button;
 }
 
 function buildACControls(remote) {
   const current = remote.ac_state;
+  const capabilities = remote.ac_capabilities || {};
   const controls = document.createElement("div");
-  controls.className = "ac-controls";
+  controls.className = "ac-controls ac-control-deck";
   controls.dataset.deviceId = String(remote.id);
 
   const primary = document.createElement("div");
   primary.className = "ac-primary-controls";
-  primary.append(
-    acControl(current.power ? "إيقاف" : "تشغيل", "power", {
+  const power = acControl(current.power ? "إيقاف" : "تشغيل", "power", {
       action: "toggle",
       active: current.power,
-      className: "ac-control-power",
+      className: `ac-control-power ${current.power ? "will-stop" : "will-start"}`,
+      icon: "⏻",
       ariaLabel: current.power ? "إيقاف المكيف" : "تشغيل المكيف",
+    });
+  const temperature = document.createElement("section");
+  temperature.className = "ac-temperature-control";
+  const temperatureLabel = document.createElement("span");
+  temperatureLabel.className = "ac-group-label";
+  temperatureLabel.textContent = "درجة الحرارة";
+  const temperatureButtons = document.createElement("div");
+  temperatureButtons.className = "ac-temperature-buttons";
+  temperatureButtons.append(
+    acControl("خفض", "temperature", {
+      action: "decrease", className: "ac-control-cooler", icon: "−",
+      ariaLabel: "خفض درجة الحرارة",
     }),
-    acControl("−", "temperature", { action: "decrease", ariaLabel: "خفض درجة الحرارة" }),
-    acControl("+", "temperature", { action: "increase", ariaLabel: "رفع درجة الحرارة" }),
+    acControl("رفع", "temperature", {
+      action: "increase", className: "ac-control-warmer", icon: "+",
+      ariaLabel: "رفع درجة الحرارة",
+    }),
   );
+  temperature.append(temperatureLabel, temperatureButtons);
+  primary.append(power, temperature);
 
   const cycles = document.createElement("div");
   cycles.className = "ac-cycle-controls";
   cycles.append(
-    acControl(`الوضع: ${AC_MODE_LABELS[current.mode] || current.mode}`, "mode", {
+    acControl(AC_MODE_LABELS[current.mode] || current.mode, "mode", {
       action: "cycle",
+      className: `ac-control-mode mode-${AC_MODE_COLORS[current.mode] || "auto"}`,
+      icon: AC_MODE_ICONS[current.mode] || "A",
+      kicker: "الوضع",
+      ariaLabel: `تغيير الوضع، الحالي ${AC_MODE_LABELS[current.mode] || current.mode}`,
     }),
-    acControl(`المروحة: ${AC_FAN_LABELS[current.fan] || current.fan}`, "fan", {
+    acControl(AC_FAN_LABELS[current.fan] || current.fan, "fan", {
       action: "cycle",
+      className: "ac-control-fan",
+      icon: "≋",
+      kicker: "سرعة المروحة",
+      ariaLabel: `تغيير سرعة المروحة، الحالية ${AC_FAN_LABELS[current.fan] || current.fan}`,
     }),
   );
 
+  const featuresLabel = document.createElement("span");
+  featuresLabel.className = "ac-group-label ac-features-label";
+  featuresLabel.textContent = "وظائف إضافية";
   const features = document.createElement("div");
   features.className = "ac-feature-controls";
   Object.entries(AC_FEATURE_LABELS).forEach(([field, label]) => {
+    if (!capabilities[field]) return;
     features.appendChild(acControl(label, field, {
       action: "toggle",
       active: current[field],
+      icon: AC_FEATURE_ICONS[field],
+      className: `ac-feature-${field}`,
     }));
   });
 
-  controls.append(primary, cycles, features);
+  controls.append(primary, cycles);
+  if (features.childElementCount) controls.append(featuresLabel, features);
   return controls;
 }
 
@@ -176,33 +256,50 @@ function buildACState(remote) {
   }
 
   const summary = document.createElement("div");
-  summary.className = "ac-state-summary";
+  summary.className = "ac-state-summary ac-lcd";
+  const lcdStatus = document.createElement("div");
+  lcdStatus.className = "ac-lcd-status";
+  const statusDot = document.createElement("span");
+  statusDot.className = "ac-lcd-dot";
   const power = document.createElement("span");
   power.className = `ac-power ${state.power ? "is-on" : "is-off"}`;
   power.textContent = state.power ? "يعمل" : "متوقف";
+  lcdStatus.append(statusDot, power);
+  const lcdTemperature = document.createElement("div");
+  lcdTemperature.className = "ac-lcd-temperature";
   const temperature = document.createElement("strong");
   temperature.className = "ac-temperature";
-  temperature.textContent = `${state.temperature}°`;
-  summary.append(power, temperature);
+  temperature.textContent = String(state.temperature);
+  const unit = document.createElement("span");
+  unit.textContent = "°C";
+  lcdTemperature.append(temperature, unit);
 
   const details = document.createElement("div");
-  details.className = "ac-state-details";
+  details.className = "ac-state-details ac-lcd-details";
   details.append(
     stateItem("الوضع", AC_MODE_LABELS[state.mode] || state.mode),
     stateItem("المروحة", AC_FAN_LABELS[state.fan] || state.fan),
   );
-
-  const features = document.createElement("div");
-  features.className = "ac-features";
+  const lcdFeatures = document.createElement("div");
+  lcdFeatures.className = "ac-lcd-features";
   Object.entries(AC_FEATURE_LABELS).forEach(([key, label]) => {
     if (!state[key]) return;
     const feature = document.createElement("span");
-    feature.textContent = label;
-    features.appendChild(feature);
+    feature.className = `is-${key}`;
+    feature.title = label;
+    feature.setAttribute("aria-label", label);
+    feature.textContent = AC_FEATURE_ICONS[key];
+    lcdFeatures.appendChild(feature);
   });
-
-  panel.append(summary, details);
-  if (features.childElementCount) panel.appendChild(features);
+  if (!lcdFeatures.childElementCount) {
+    const empty = document.createElement("small");
+    empty.textContent = "لا وظائف إضافية مفعّلة";
+    lcdFeatures.appendChild(empty);
+  }
+  summary.append(lcdStatus, lcdTemperature, details, lcdFeatures);
+  panel.dataset.power = state.power ? "on" : "off";
+  panel.dataset.mode = state.mode;
+  panel.append(summary);
   panel.appendChild(buildACControls(remote));
   return panel;
 }
@@ -402,7 +499,10 @@ function acChangeFor(remote, node) {
   if (action === "toggle") return { [field]: !current[field] };
   if (field === "temperature") {
     const difference = action === "increase" ? 1 : -1;
-    return { temperature: Math.min(32, Math.max(16, current.temperature + difference)) };
+    const capabilities = remote.ac_capabilities || {};
+    const minimum = capabilities.temperature_min ?? 16;
+    const maximum = capabilities.temperature_max ?? 32;
+    return { temperature: Math.min(maximum, Math.max(minimum, current.temperature + difference)) };
   }
   if (field === "mode") return { mode: nextValue(AC_MODES, current.mode) };
   if (field === "fan") return { fan: nextValue(AC_FANS, current.fan) };

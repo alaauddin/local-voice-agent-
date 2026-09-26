@@ -253,9 +253,7 @@ class RemoteControlAdminForm(forms.ModelForm):
             "device_name",
             "device_ip",
             "device_type",
-            "brand",
             "protocol",
-            "protocol_model",
             "template",
             "template_slug",
             "is_active",
@@ -270,9 +268,7 @@ class RemoteControlAdminForm(forms.ModelForm):
         }
         help_texts = {
             "device_type": "Choose Air conditioner for state-based Gree, Haier, Midea, or Hisense control. Choose Raw IR for TVs, fans, and learned remotes.",
-            "brand": "The appliance brand. This does not replace the protocol selection.",
-            "protocol": "The exact IR protocol the selected ESP32 should transmit.",
-            "protocol_model": "Use Default unless you know the remote/model variant.",
+            "protocol": "Choose the IR protocol. Brand and model are selected automatically.",
             "guest_visible": "Show this remote to guests on the kiosk.",
             "voice_enabled": "Allow voice commands to control this remote.",
         }
@@ -281,25 +277,28 @@ class RemoteControlAdminForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if not self.instance.pk:
             self.fields["device_name"].initial = "ESP32 IR Controller"
-            self.fields["protocol_model"].initial = RemoteControl.ProtocolModel.DEFAULT
 
     def clean(self):
         cleaned_data = super().clean()
         if cleaned_data.get("device_type") != RemoteControl.DeviceType.AC:
-            cleaned_data["brand"] = ""
             cleaned_data["protocol"] = ""
-            cleaned_data["protocol_model"] = ""
+            self.instance.brand = ""
+            self.instance.protocol = ""
+            self.instance.protocol_model = ""
             return cleaned_data
 
         required = {
-            "brand": "Choose the AC brand.",
             "protocol": "Choose the exact AC protocol.",
-            "protocol_model": "Choose Default or the matching model variant.",
             "device_name": "Enter the ESP32 DEVICE_NAME used for discovery and synchronization.",
         }
         for field, message in required.items():
             if cleaned_data.get(field) in (None, ""):
                 self.add_error(field, message)
+        protocol = cleaned_data.get("protocol")
+        if protocol:
+            from .ac_control import protocol_defaults
+
+            self.instance.brand, self.instance.protocol_model = protocol_defaults(protocol)
         return cleaned_data
 
 
@@ -332,7 +331,23 @@ class ACStateInline(admin.StackedInline):
             },
         ),
     )
-    readonly_fields = ("state_version", "esp32_updated_at", "updated_at")
+    readonly_fields = (
+        "power",
+        "mode",
+        "temperature",
+        "fan",
+        "swing_vertical",
+        "swing_horizontal",
+        "turbo",
+        "sleep",
+        "eco",
+        "quiet",
+        "light",
+        "x_fan",
+        "state_version",
+        "esp32_updated_at",
+        "updated_at",
+    )
 
 
 @admin.register(RemoteControl)
@@ -386,11 +401,10 @@ class RemoteControlAdmin(admin.ModelAdmin):
             "Air-conditioner configuration",
             {
                 "fields": (
-                    ("brand", "protocol"),
-                    "protocol_model",
+                    "protocol",
                 ),
                 "classes": ("ac-config",),
-                "description": "Only used for Air conditioner remotes. Django sends this configuration to the ESP32 selected by DEVICE_NAME.",
+                "description": "Choose only the protocol. Django automatically selects its brand, model, and supported controls.",
             },
         ),
         (
@@ -492,6 +506,7 @@ class RemoteControlAdmin(admin.ModelAdmin):
         synced = 0
         missing = []
         ambiguous = []
+        incompatible = []
         now = timezone.now()
 
         with transaction.atomic():
@@ -509,7 +524,22 @@ class RemoteControlAdmin(admin.ModelAdmin):
                     ambiguous.append(remote.device_name)
                     continue
 
-                remote.device_ip = matches[0]["ip"]
+                device = matches[0]
+                if (
+                    remote.device_type == RemoteControl.DeviceType.AC
+                    and "ac_control" not in device.get("capabilities", [])
+                ):
+                    firmware = device.get("firmware_version") or "unknown"
+                    incompatible.append(f"{remote.device_name} (firmware {firmware})")
+                    if remote.device_ip or remote.device_last_seen_at:
+                        remote.device_ip = None
+                        remote.device_last_seen_at = None
+                        remote.save(
+                            update_fields=("device_ip", "device_last_seen_at", "updated_at")
+                        )
+                    continue
+
+                remote.device_ip = device["ip"]
                 remote.device_last_seen_at = now
                 remote.save(update_fields=("device_ip", "device_last_seen_at", "updated_at"))
                 synced += 1
@@ -530,6 +560,14 @@ class RemoteControlAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 "Duplicate DEVICE_NAME responses: " + ", ".join(ambiguous),
+                level=messages.ERROR,
+            )
+        if incompatible:
+            self.message_user(
+                request,
+                "AC controller firmware does not advertise ac_control: "
+                + ", ".join(incompatible)
+                + ". Upload the current ESP32 firmware, then sync again.",
                 level=messages.ERROR,
             )
 

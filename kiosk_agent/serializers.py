@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .ac_control import serialize_ac_state
+from .ac_control import protocol_capabilities, serialize_ac_state
 from .models import ACState, ChaletConfig, KioskMessage, RemoteButton, RemoteControl
 
 
@@ -81,6 +81,7 @@ class RemoteControlPublicSerializer(serializers.ModelSerializer):
     buttons = serializers.SerializerMethodField()
     brand_label = serializers.CharField(source="get_brand_display", read_only=True)
     ac_state = serializers.SerializerMethodField()
+    ac_capabilities = serializers.SerializerMethodField()
 
     class Meta:
         model = RemoteControl
@@ -97,6 +98,7 @@ class RemoteControlPublicSerializer(serializers.ModelSerializer):
             "protocol_model",
             "sort_order",
             "ac_state",
+            "ac_capabilities",
             "buttons",
         )
 
@@ -116,3 +118,8 @@ class RemoteControlPublicSerializer(serializers.ModelSerializer):
             "updated_at": state.updated_at,
             **serialize_ac_state(state),
         }
+
+    def get_ac_capabilities(self, obj):
+        if obj.device_type != RemoteControl.DeviceType.AC:
+            return None
+        return protocol_capabilities(obj.protocol)

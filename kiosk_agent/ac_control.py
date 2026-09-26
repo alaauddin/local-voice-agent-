@@ -36,6 +36,92 @@ BOOLEAN_FIELDS = {
     "x_fan",
 }
 
+AC_PROTOCOL_CONFIG = {
+    RemoteControl.Protocol.GREE: {
+        "brand": RemoteControl.Brand.GREE,
+        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "features": {
+            "swing_vertical", "swing_horizontal", "turbo", "sleep",
+            "eco", "light", "x_fan",
+        },
+        "temperature_min": 16,
+        "temperature_max": 30,
+    },
+    RemoteControl.Protocol.HAIER_AC: {
+        "brand": RemoteControl.Brand.HAIER,
+        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "features": {"swing_vertical", "sleep"},
+        "temperature_min": 16,
+        "temperature_max": 30,
+    },
+    RemoteControl.Protocol.HAIER_AC_YRW02: {
+        "brand": RemoteControl.Brand.HAIER,
+        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "features": {
+            "swing_vertical", "swing_horizontal", "turbo", "sleep", "quiet",
+        },
+        "temperature_min": 16,
+        "temperature_max": 30,
+    },
+    RemoteControl.Protocol.HAIER_AC160: {
+        "brand": RemoteControl.Brand.HAIER,
+        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "features": {
+            "swing_vertical", "turbo", "sleep", "quiet", "light", "x_fan",
+        },
+        "temperature_min": 16,
+        "temperature_max": 30,
+    },
+    RemoteControl.Protocol.HAIER_AC176: {
+        "brand": RemoteControl.Brand.HAIER,
+        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "features": {
+            "swing_vertical", "swing_horizontal", "turbo", "sleep", "quiet",
+        },
+        "temperature_min": 16,
+        "temperature_max": 30,
+    },
+    RemoteControl.Protocol.MIDEA: {
+        "brand": RemoteControl.Brand.MIDEA,
+        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "features": {
+            "swing_vertical", "turbo", "sleep", "eco", "quiet", "light", "x_fan",
+        },
+        "temperature_min": 16,
+        "temperature_max": 30,
+    },
+    RemoteControl.Protocol.KELON168: {
+        "brand": RemoteControl.Brand.HISENSE,
+        "model": RemoteControl.ProtocolModel.DEFAULT,
+        "features": {"swing_vertical", "turbo", "sleep", "light"},
+        "temperature_min": 16,
+        "temperature_max": 32,
+    },
+}
+
+
+def protocol_defaults(protocol: str) -> tuple[str, str]:
+    config = AC_PROTOCOL_CONFIG.get(protocol)
+    if not config:
+        return "", ""
+    return str(config["brand"]), str(config["model"])
+
+
+def protocol_capabilities(protocol: str) -> dict:
+    config = AC_PROTOCOL_CONFIG.get(protocol)
+    if not config:
+        return {}
+    features = config["features"]
+    return {
+        "power": True,
+        "temperature": True,
+        "temperature_min": config["temperature_min"],
+        "temperature_max": config["temperature_max"],
+        "mode": True,
+        "fan": True,
+        **{field: field in features for field in BOOLEAN_FIELDS if field != "power"},
+    }
+
 
 class ACControlError(Exception):
     def __init__(self, code: str, message: str, *, http_status: int | None = None):
@@ -89,6 +175,11 @@ def _parse_esp32_response(response: httpx.Response, device: RemoteControl) -> di
             message = str(response.json().get("message") or message)
         except (TypeError, ValueError):
             pass
+        if response.status_code == 404 and "endpoint not found" in message.casefold():
+            message = (
+                "This ESP32 is running firmware without AC control. "
+                "Upload the current firmware and sync its IP again."
+            )
         raise ACControlError("controller_error", message, http_status=response.status_code)
     try:
         payload = response.json()
@@ -127,8 +218,13 @@ def set_ac_state(device_id: int, changes: dict, *, request_id: str | None = None
 
     changes = _validate_state_values(dict(changes))
     state, _ = ACState.objects.select_for_update().get_or_create(device=device)
-    merged = serialize_ac_state(state)
-    merged.update(changes)
+    capabilities = protocol_capabilities(device.protocol)
+    for field in changes:
+        if field in capabilities and capabilities[field] is False:
+            raise ACControlError(
+                "invalid_state",
+                f"{field} is not supported by the selected protocol.",
+            )
     request_id = request_id or str(uuid.uuid4())
     payload = {
         "source": "django",
@@ -137,7 +233,9 @@ def set_ac_state(device_id: int, changes: dict, *, request_id: str | None = None
         "protocol": device.protocol,
         "model": device.protocol_model,
         "state_version": state.state_version + 1,
-        **merged,
+        # Send only the requested changes. Including every stored field makes
+        # the ESP32 reject unsupported fields even when their value is false.
+        **changes,
     }
 
     timeout = float(getattr(settings, "AC_COMMAND_TIMEOUT_SECONDS", 5.0) or 5.0)

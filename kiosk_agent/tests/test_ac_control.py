@@ -70,6 +70,15 @@ class ACControlTests(TestCase):
         self.assertEqual(sent["protocol"], "gree")
         self.assertEqual(sent["model"], "default")
         self.assertEqual(sent["temperature"], 22)
+        self.assertNotIn("quiet", sent)
+        self.assertNotIn("swing_vertical", sent)
+
+    def test_unsupported_field_is_rejected_before_contacting_esp32(self):
+        with self.assertRaisesMessage(
+            ACControlError,
+            "quiet is not supported by the selected protocol",
+        ):
+            set_ac_state(self.device.pk, {"quiet": True})
 
     @patch("kiosk_agent.ac_control.httpx.Client")
     def test_failed_transmission_does_not_change_django_state(self, client_cls):
@@ -85,6 +94,19 @@ class ACControlTests(TestCase):
         self.state.refresh_from_db()
         self.assertEqual(self.state.temperature, 24)
         self.assertEqual(self.state.state_version, 0)
+
+    @patch("kiosk_agent.ac_control.httpx.Client")
+    def test_old_firmware_endpoint_error_is_explained(self, client_cls):
+        response = type("Response", (), {})()
+        response.status_code = 404
+        response.json = lambda: {"status": "error", "message": "endpoint not found"}
+        client_cls.return_value.__enter__.return_value.post.return_value = response
+
+        with self.assertRaisesMessage(
+            ACControlError,
+            "This ESP32 is running firmware without AC control",
+        ):
+            set_ac_state(self.device.pk, {"power": True})
 
     def test_internal_sync_ignores_older_version_without_looping(self):
         self.state.state_version = 5
@@ -119,6 +141,9 @@ class ACControlTests(TestCase):
         self.assertEqual(remote["ac_state"]["temperature"], 21)
         self.assertEqual(remote["ac_state"]["fan"], "high")
         self.assertTrue(remote["ac_state"]["swing_vertical"])
+        self.assertFalse(remote["ac_capabilities"]["quiet"])
+        self.assertTrue(remote["ac_capabilities"]["turbo"])
+        self.assertEqual(remote["ac_capabilities"]["temperature_max"], 30)
 
     @patch("kiosk_agent.ac_control.httpx.Client")
     def test_patch_endpoint_returns_confirmed_state(self, client_cls):
@@ -158,9 +183,7 @@ class ACRemoteAdminTests(TestCase):
                 "location": "Bedroom",
                 "device_type": "ac",
                 "device_name": "ESP32 IR Controller",
-                "brand": "haier",
                 "protocol": "haier_ac_yrw02",
-                "protocol_model": "default",
                 "is_active": "on",
                 "guest_visible": "on",
                 "sort_order": 0,
@@ -174,7 +197,9 @@ class ACRemoteAdminTests(TestCase):
             reverse("admin:kiosk_agent_remotecontrol_change", args=[remote.pk]),
         )
         self.assertTrue(ACState.objects.filter(device=remote).exists())
+        self.assertEqual(remote.brand, RemoteControl.Brand.HAIER)
         self.assertEqual(remote.protocol, RemoteControl.Protocol.HAIER_AC_YRW02)
+        self.assertEqual(remote.protocol_model, RemoteControl.ProtocolModel.DEFAULT)
 
     def test_ac_creation_explains_missing_configuration(self):
         response = self.client.post(
@@ -184,12 +209,67 @@ class ACRemoteAdminTests(TestCase):
                 "slug": "incomplete-ac",
                 "device_type": "ac",
                 "device_name": "ESP32 IR Controller",
-                "protocol_model": "default",
                 "is_active": "on",
                 "sort_order": 0,
             },
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Choose the AC brand")
         self.assertContains(response, "Choose the exact AC protocol")
+
+    @patch("kiosk_agent.admin.discover_identity_devices")
+    def test_ac_ip_sync_rejects_firmware_without_ac_control(self, discover):
+        remote = RemoteControl.objects.create(
+            name="Old firmware AC",
+            slug="old-firmware-ac",
+            device_name="ESP32 IR Controller",
+            device_ip="10.173.92.23",
+            device_type=RemoteControl.DeviceType.AC,
+            brand=RemoteControl.Brand.GREE,
+            protocol=RemoteControl.Protocol.GREE,
+            protocol_model=RemoteControl.ProtocolModel.DEFAULT,
+        )
+        discover.return_value = [{
+            "name": "ESP32 IR Controller",
+            "type": "esp32",
+            "ip": "10.173.92.23",
+            "firmware_version": "1.0.0",
+            "capabilities": ["ir_receive", "ir_transmit", "http_api"],
+        }]
+
+        response = self.client.post(
+            reverse("admin:kiosk_agent_remotecontrol_changelist"),
+            {"action": "sync_device_ips", "_selected_action": [remote.pk]},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        remote.refresh_from_db()
+        self.assertIsNone(remote.device_ip)
+
+    @patch("kiosk_agent.admin.discover_identity_devices")
+    def test_ac_ip_sync_accepts_ac_capable_firmware(self, discover):
+        remote = RemoteControl.objects.create(
+            name="Current firmware AC",
+            slug="current-firmware-ac",
+            device_name="ESP32 IR Controller",
+            device_type=RemoteControl.DeviceType.AC,
+            brand=RemoteControl.Brand.GREE,
+            protocol=RemoteControl.Protocol.GREE,
+            protocol_model=RemoteControl.ProtocolModel.DEFAULT,
+        )
+        discover.return_value = [{
+            "name": "ESP32 IR Controller",
+            "type": "esp32",
+            "ip": "10.173.92.23",
+            "firmware_version": "1.2.0",
+            "capabilities": ["ir_receive", "ir_transmit", "http_api", "ac_control"],
+        }]
+
+        response = self.client.post(
+            reverse("admin:kiosk_agent_remotecontrol_changelist"),
+            {"action": "sync_device_ips", "_selected_action": [remote.pk]},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        remote.refresh_from_db()
+        self.assertEqual(str(remote.device_ip), "10.173.92.23")
