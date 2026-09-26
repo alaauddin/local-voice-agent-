@@ -1,0 +1,266 @@
+{% load static %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17201f">
+  <title>ترتيب أزرار التحكم</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'kiosk_agent/button_config.css' %}">
+</head>
+<body>
+  <header class="config-header">
+    <div>
+      <small>إعداد أجهزة التحكم</small>
+      <h1>ترتيب وتهيئة الأزرار</h1>
+    </div>
+    <nav>
+      <a href="{% url 'kiosk-chat' %}">عرض شاشة الضيف</a>
+      <a href="{% url 'admin:index' %}">لوحة الإدارة</a>
+    </nav>
+  </header>
+
+  <main class="config-shell"
+        data-load-pattern="{% url 'button-config-data' 0 %}"
+        data-save-pattern="{% url 'button-config-save' 0 %}"
+        data-sync-ip-pattern="{% url 'button-config-sync-ip' 0 %}"
+        data-ac-test-pattern="{% url 'button-config-ac-test' 0 %}"
+        data-capture-start-pattern="{% url 'button-capture-start' 0 %}"
+        data-capture-status-pattern="{% url 'button-capture-status' 0 %}">
+    <form class="csrf-form" aria-hidden="true">{% csrf_token %}</form>
+    {{ remotes|json_script:"remote-data" }}
+    {{ key_choices|json_script:"key-choice-data" }}
+    {{ icon_choices|json_script:"icon-choice-data" }}
+
+    <section class="toolbar" aria-label="اختيار جهاز التحكم">
+      <label>
+        <span>جهاز التحكم</span>
+        <select id="remoteSelect">
+          {% for remote in remotes %}
+            <option value="{{ remote.id }}">{{ remote.name }}{% if remote.location %} — {{ remote.location }}{% endif %}</option>
+          {% empty %}
+            <option value="">لا توجد أجهزة تحكم</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="columns-field">
+        <span>عدد الأعمدة</span>
+        <select id="columnCount">
+          <option value="1">1</option>
+          <option value="2" selected>2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+        </select>
+      </label>
+      <span id="remoteTypeBadge" class="remote-type-badge"></span>
+      <button id="addButton" class="secondary-button" type="button">+ زر جديد</button>
+      <button id="saveLayout" class="primary-button" type="button">حفظ الترتيب والإعدادات</button>
+      <span id="saveStatus" class="save-status" role="status" aria-live="polite"></span>
+    </section>
+
+    <section class="remote-settings" aria-label="إعدادات جهاز التحكم">
+      <strong>حالة جهاز التحكم</strong>
+      <label class="device-name-field">
+        <span>Device name</span>
+        <input id="remoteDeviceName" type="text" maxlength="120" dir="ltr" placeholder="ESP32 IR Controller">
+      </label>
+      <div class="device-sync-field">
+        <span>Current IP: <b id="remoteDeviceIp">—</b></span>
+        <button id="syncDeviceIp" type="button">Sync IP</button>
+        <small id="syncIpStatus" role="status" aria-live="polite"></small>
+      </div>
+      <label>
+        <input id="remoteActive" type="checkbox">
+        <span>الجهاز مفعّل</span>
+      </label>
+      <label>
+        <input id="remoteGuestVisible" type="checkbox">
+        <span>إظهاره في شاشة الضيف</span>
+      </label>
+      <label>
+        <input id="remoteVoiceEnabled" type="checkbox">
+        <span>السماح بالتحكم الصوتي</span>
+      </label>
+    </section>
+
+    <section id="acWorkspace" class="ac-workspace" hidden>
+      <article class="ac-setup-card">
+        <header class="section-heading">
+          <div>
+            <small>إعداد الاتصال والبروتوكول</small>
+            <h2>تهيئة المكيف</h2>
+          </div>
+          <span id="acConnectionBadge" class="connection-badge">غير متصل</span>
+        </header>
+        <label class="ac-protocol-field">
+          <span>بروتوكول المكيف</span>
+          <select id="acProtocol"></select>
+          <small>اختر البروتوكول المطابق تمامًا لجهازك. سيتم تحديد الماركة والموديل تلقائيًا.</small>
+        </label>
+        <div class="ac-meta-grid">
+          <div><small>الماركة</small><strong id="acBrand">—</strong></div>
+          <div><small>الموديل</small><strong id="acModel">—</strong></div>
+          <div><small>إصدار الحالة</small><strong id="acStateVersion">0</strong></div>
+        </div>
+        <div class="ac-visibility-section">
+          <div>
+            <strong>عناصر التحكم الظاهرة للضيف</strong>
+            <small>أخفِ أي زر لا تريد عرضه، حتى لو كان البروتوكول يدعمه.</small>
+          </div>
+          <div id="acVisibility" class="visibility-grid"></div>
+        </div>
+        <div class="ac-help">
+          <strong>ترتيب الإعداد الصحيح</strong>
+          <ol>
+            <li>اختر البروتوكول واحفظ الإعدادات.</li>
+            <li>أدخل Device name ثم نفّذ Sync IP.</li>
+            <li>اضبط الحالة واضغط «إرسال وتجربة».</li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="ac-controller-card">
+        <header class="section-heading">
+          <div>
+            <small>تحكم مباشر واختبار فعلي</small>
+            <h2>لوحة المكيف</h2>
+          </div>
+          <label class="power-switch">
+            <input id="acPower" type="checkbox">
+            <span>تشغيل</span>
+          </label>
+        </header>
+
+        <div class="thermostat">
+          <button id="acTempMinus" type="button" aria-label="خفض درجة الحرارة">−</button>
+          <div><strong id="acTemperature">24</strong><span>°C</span></div>
+          <button id="acTempPlus" type="button" aria-label="رفع درجة الحرارة">+</button>
+        </div>
+
+        <div class="ac-control-group">
+          <span>الوضع</span>
+          <div id="acModes" class="segment-control">
+            <button type="button" data-value="auto">تلقائي</button>
+            <button type="button" data-value="cool">تبريد</button>
+            <button type="button" data-value="heat">تدفئة</button>
+            <button type="button" data-value="dry">تجفيف</button>
+            <button type="button" data-value="fan">مروحة</button>
+          </div>
+        </div>
+
+        <div class="ac-control-group">
+          <span>سرعة المروحة</span>
+          <div id="acFans" class="segment-control compact">
+            <button type="button" data-value="auto">تلقائي</button>
+            <button type="button" data-value="low">منخفض</button>
+            <button type="button" data-value="medium">متوسط</button>
+            <button type="button" data-value="high">مرتفع</button>
+          </div>
+        </div>
+
+        <div class="ac-control-group">
+          <span>الميزات المدعومة</span>
+          <div id="acFeatures" class="feature-grid"></div>
+        </div>
+
+        <div class="ac-test-row">
+          <button id="acTest" class="primary-button" type="button">إرسال وتجربة الحالة</button>
+          <small id="acTestStatus" role="status" aria-live="polite"></small>
+        </div>
+      </article>
+    </section>
+
+    <section id="rawWorkspace" class="workspace">
+      <div class="layout-card">
+        <header>
+          <div>
+            <small>اسحب وأفلت لإعادة الترتيب</small>
+            <h2 id="layoutTitle">الأزرار</h2>
+          </div>
+          <span class="drag-hint">اسحب من المقبض ⋮⋮</span>
+        </header>
+        <div id="buttonGrid" class="button-grid" aria-label="ترتيب الأزرار"></div>
+        <div id="emptyState" class="empty-state" hidden>أضف أول زر لهذا الجهاز.</div>
+      </div>
+
+      <aside class="editor-card" id="buttonEditor" aria-label="إعداد الزر">
+        <div id="editorEmpty" class="editor-empty">
+          <span>☝</span>
+          <p>اختر زرًا لتعديل إعداداته.</p>
+        </div>
+        <div id="editorFields" hidden>
+          <header>
+            <div>
+              <small>إعداد الزر المحدد</small>
+              <h2 id="editorTitle">زر</h2>
+            </div>
+            <span id="configuredBadge" class="configured-badge"></span>
+          </header>
+
+          <div class="field-grid">
+            <label class="wide-field">
+              <span>اسم الزر الظاهر</span>
+              <input id="buttonLabel" type="text" maxlength="80" required>
+            </label>
+            <label>
+              <span>وظيفة الزر</span>
+              <select id="buttonKey"></select>
+            </label>
+            <label id="manualKeyField" hidden>
+              <span>مفتاح الوظيفة اليدوي</span>
+              <input id="buttonManualKey" type="text" maxlength="80" dir="ltr" placeholder="custom_action" pattern="[-a-zA-Z0-9_]+">
+              <small>استخدم حروفًا إنجليزية أو أرقامًا أو _ أو -</small>
+            </label>
+            <label>
+              <span>الأيقونة</span>
+              <select id="buttonIcon"></select>
+            </label>
+            <label>
+              <span>رقم وحدة التحكم</span>
+              <input id="buttonIrId" type="number" min="1" step="1">
+            </label>
+            <label>
+              <span>التردد (kHz)</span>
+              <input id="buttonFrequency" type="number" min="1" max="65535" step="1">
+            </label>
+            <label class="wide-field">
+              <span>رابط إرسال أمر IR</span>
+              <input id="buttonUrl" type="url" maxlength="500" dir="ltr" placeholder="http://192.168.1.102/ir">
+              <small>يمكن تركه فارغًا عندما يكون عنوان الجهاز مكتشفًا تلقائيًا.</small>
+            </label>
+            <label class="wide-field">
+              <span>نبضات IR بصيغة JSON</span>
+              <textarea id="buttonRaw" rows="7" dir="ltr" spellcheck="false" placeholder="[9000, 4500, 560, ...]"></textarea>
+            </label>
+          </div>
+
+          <section class="capture-panel" aria-label="قراءة إشارة جهاز التحكم">
+            <div>
+              <strong>قراءة الإشارة من ESP32</strong>
+              <small id="captureDevice">يجب مزامنة عنوان الجهاز أولًا.</small>
+            </div>
+            <button id="captureSignal" type="button">ابدأ قراءة IR</button>
+            <p id="captureStatus" role="status" aria-live="polite"></p>
+          </section>
+
+          <div class="toggle-row">
+            <label><input id="buttonActive" type="checkbox"> <span>إظهار الزر للضيف</span></label>
+            <label><input id="buttonConfirm" type="checkbox"> <span>طلب تأكيد قبل التنفيذ</span></label>
+          </div>
+
+          <div class="move-row" aria-label="تحريك الزر">
+            <span>تحريك سريع:</span>
+            <button type="button" data-move="-1">السابق</button>
+            <button type="button" data-move="1">التالي</button>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script type="module" src="{% static 'kiosk_agent/js/button_config.js' %}"></script>
+</body>
+</html>

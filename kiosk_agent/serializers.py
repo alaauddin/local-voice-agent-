@@ -122,4 +122,8 @@ class RemoteControlPublicSerializer(serializers.ModelSerializer):
     def get_ac_capabilities(self, obj):
         if obj.device_type != RemoteControl.DeviceType.AC:
             return None
-        return protocol_capabilities(obj.protocol)
+        capabilities = protocol_capabilities(obj.protocol)
+        for field, visible in (obj.ac_control_visibility or {}).items():
+            if field in capabilities and visible is False:
+                capabilities[field] = False
+        return capabilities

@@ -6,6 +6,7 @@ import { headers, patchJson, postJson, uuid } from "./api.js";
 
 const REMOTE_ICONS = {
   power: "⏻",
+  power_speed: "⏻≋",
   plus: "＋",
   minus: "−",
   mode: "⟳",
@@ -15,10 +16,47 @@ const REMOTE_ICONS = {
   down: "⌄",
   left: "‹",
   right: "›",
+  ok: "OK",
+  back: "↩",
+  home: "⌂",
+  settings: "⚙",
+  info: "ⓘ",
+  guide: "GUIDE",
+  input: "INPUT",
   play: "▶",
   pause: "Ⅱ",
+  stop: "■",
+  record: "●",
+  rewind: "◀◀",
+  fast_forward: "▶▶",
+  previous: "|◀",
+  next: "▶|",
   menu: "MENU",
   volume: "◖",
+  volume_up: "VOL＋",
+  volume_down: "VOL−",
+  mute: "MUTE",
+  channel_up: "CH＋",
+  channel_down: "CH−",
+  cool: "❄",
+  heat: "☀",
+  dry: "💧",
+  swing_vertical: "↕",
+  swing_horizontal: "↔",
+  turbo: "⚡",
+  sleep: "☾",
+  timer: "◷",
+  eco: "♧",
+  number_0: "0",
+  number_1: "1",
+  number_2: "2",
+  number_3: "3",
+  number_4: "4",
+  number_5: "5",
+  number_6: "6",
+  number_7: "7",
+  number_8: "8",
+  number_9: "9",
 };
 
 const AC_MODE_LABELS = {
@@ -204,11 +242,12 @@ function buildACControls(remote) {
     }),
   );
   temperature.append(temperatureLabel, temperatureButtons);
-  primary.append(power, temperature);
+  if (capabilities.power) primary.append(power);
+  if (capabilities.temperature) primary.append(temperature);
 
   const cycles = document.createElement("div");
   cycles.className = "ac-cycle-controls";
-  cycles.append(
+  if (capabilities.mode) cycles.append(
     acControl(AC_MODE_LABELS[current.mode] || current.mode, "mode", {
       action: "cycle",
       className: `ac-control-mode mode-${AC_MODE_COLORS[current.mode] || "auto"}`,
@@ -216,6 +255,8 @@ function buildACControls(remote) {
       kicker: "الوضع",
       ariaLabel: `تغيير الوضع، الحالي ${AC_MODE_LABELS[current.mode] || current.mode}`,
     }),
+  );
+  if (capabilities.fan) cycles.append(
     acControl(AC_FAN_LABELS[current.fan] || current.fan, "fan", {
       action: "cycle",
       className: "ac-control-fan",
@@ -240,7 +281,8 @@ function buildACControls(remote) {
     }));
   });
 
-  controls.append(primary, cycles);
+  if (primary.childElementCount) controls.append(primary);
+  if (cycles.childElementCount) controls.append(cycles);
   if (features.childElementCount) controls.append(featuresLabel, features);
   return controls;
 }

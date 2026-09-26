@@ -210,6 +210,77 @@ class RemoteTemplate(models.Model):
         return self.name
 
 
+class RemoteButtonKey(models.TextChoices):
+    POWER_ON = "power_on", "Power On"
+    POWER_OFF = "power_off", "Power Off"
+    POWER_SPEED = "power_speed", "Power / Speed"
+    SPEED_UP = "speed_up", "Speed Up"
+    SPEED_DOWN = "speed_down", "Speed Down"
+    TEMP_UP = "temp_up", "Temperature Up"
+    TEMP_DOWN = "temp_down", "Temperature Down"
+    MODE = "mode", "Mode"
+    FAN = "fan", "Fan"
+    ON = "on", "On"
+    OFF = "off", "Off"
+    DIM = "dim", "Dim"
+    BRIGHT = "bright", "Bright"
+
+
+class RemoteButtonIcon(models.TextChoices):
+    POWER = "power", "Power"
+    POWER_SPEED = "power_speed", "Power / Speed"
+    PLUS = "plus", "Plus"
+    MINUS = "minus", "Minus"
+    MODE = "mode", "Mode"
+    FAN = "fan", "Fan"
+    LIGHT = "light", "Light"
+    UP = "up", "Up"
+    DOWN = "down", "Down"
+    LEFT = "left", "Left"
+    RIGHT = "right", "Right"
+    OK = "ok", "OK / Select"
+    BACK = "back", "Back"
+    HOME = "home", "Home"
+    MENU = "menu", "Menu"
+    SETTINGS = "settings", "Settings"
+    INFO = "info", "Information"
+    GUIDE = "guide", "Guide"
+    INPUT = "input", "Input / Source"
+    PLAY = "play", "Play"
+    PAUSE = "pause", "Pause"
+    STOP = "stop", "Stop"
+    RECORD = "record", "Record"
+    REWIND = "rewind", "Rewind"
+    FAST_FORWARD = "fast_forward", "Fast Forward"
+    PREVIOUS = "previous", "Previous"
+    NEXT = "next", "Next"
+    VOLUME = "volume", "Volume"
+    VOLUME_UP = "volume_up", "Volume Up"
+    VOLUME_DOWN = "volume_down", "Volume Down"
+    MUTE = "mute", "Mute"
+    CHANNEL_UP = "channel_up", "Channel Up"
+    CHANNEL_DOWN = "channel_down", "Channel Down"
+    COOL = "cool", "Cool"
+    HEAT = "heat", "Heat"
+    DRY = "dry", "Dry"
+    SWING_VERTICAL = "swing_vertical", "Vertical Swing"
+    SWING_HORIZONTAL = "swing_horizontal", "Horizontal Swing"
+    TURBO = "turbo", "Turbo"
+    SLEEP = "sleep", "Sleep"
+    TIMER = "timer", "Timer"
+    ECO = "eco", "Eco"
+    NUMBER_0 = "number_0", "Number 0"
+    NUMBER_1 = "number_1", "Number 1"
+    NUMBER_2 = "number_2", "Number 2"
+    NUMBER_3 = "number_3", "Number 3"
+    NUMBER_4 = "number_4", "Number 4"
+    NUMBER_5 = "number_5", "Number 5"
+    NUMBER_6 = "number_6", "Number 6"
+    NUMBER_7 = "number_7", "Number 7"
+    NUMBER_8 = "number_8", "Number 8"
+    NUMBER_9 = "number_9", "Number 9"
+
+
 class RemoteTemplateButton(models.Model):
     template = models.ForeignKey(
         RemoteTemplate,
@@ -218,7 +289,11 @@ class RemoteTemplateButton(models.Model):
     )
     key = models.SlugField(max_length=80)
     label = models.CharField(max_length=80)
-    icon = models.CharField(max_length=40, blank=True)
+    icon = models.CharField(
+        max_length=40,
+        choices=RemoteButtonIcon.choices,
+        blank=True,
+    )
     sort_order = models.PositiveSmallIntegerField(default=0)
     row = models.PositiveSmallIntegerField(default=0)
     column = models.PositiveSmallIntegerField(default=0)
@@ -312,6 +387,11 @@ class RemoteControl(models.Model):
         default=True,
         help_text="Show this remote on the kiosk guest panel.",
     )
+    ac_control_visibility = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Per-control visibility overrides for the AC guest interface.",
+    )
     sort_order = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -385,7 +465,11 @@ class RemoteButton(models.Model):
     )
     key = models.SlugField(max_length=80)
     label = models.CharField(max_length=80)
-    icon = models.CharField(max_length=40, blank=True)
+    icon = models.CharField(
+        max_length=40,
+        choices=RemoteButtonIcon.choices,
+        blank=True,
+    )
     sort_order = models.PositiveSmallIntegerField(default=0)
     row = models.PositiveSmallIntegerField(default=0)
     column = models.PositiveSmallIntegerField(default=0)

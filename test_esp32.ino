@@ -43,7 +43,7 @@ const char* DEVICE_NAME = "ESP32 IR Controller";
 const char* DEVICE_TYPE = "esp32";
 const char* DEVICE_HOSTNAME = "esp32-ir-controller";
 const char* DEVICE_MANUFACTURER = "Espressif";
-const char* FIRMWARE_VERSION = "1.2.0";
+const char* FIRMWARE_VERSION = "1.3.0";
 const char* IDENTITY_PROTOCOL = "wazen-device-identity/1";
 
 
@@ -123,6 +123,7 @@ unsigned long captureStartedAt = 0;
 
 unsigned long lastReconnectAttempt = 0;
 uint32_t signalRevision = 0;
+uint32_t captureBaselineRevision = 0;
 
 wl_status_t lastWiFiStatus = WL_NO_SHIELD;
 
@@ -1431,6 +1432,8 @@ void handleIdentity() {
 
   capabilities.add("ac_control");
 
+  capabilities.add("ir_capture_api");
+
 
 
   String response;
@@ -1514,6 +1517,8 @@ void handleCapture() {
   }
 
 
+
+  captureBaselineRevision = signalRevision;
 
   captureEnabled = true;
 
@@ -1863,6 +1868,70 @@ void sendACError(int statusCode, const String& message) {
   doc["success"] = false;
   doc["message"] = message;
   sendJsonDocument(statusCode, doc);
+}
+
+
+void handleApiCaptureStart() {
+  uint8_t frequency = 38;
+
+  if (server.hasArg("plain") && server.arg("plain").length() > 0) {
+    JsonDocument doc;
+    const DeserializationError error = deserializeJson(doc, server.arg("plain"));
+
+    if (error || !doc.is<JsonObject>()) {
+      sendACError(400, "invalid JSON object");
+      return;
+    }
+
+    if (doc["frequency"].is<int>()) {
+      const int requestedFrequency = doc["frequency"].as<int>();
+
+      if (requestedFrequency < 20 || requestedFrequency > 100) {
+        sendACError(400, "frequency must be 20-100 kHz");
+        return;
+      }
+
+      frequency = (uint8_t)requestedFrequency;
+    }
+  }
+
+  captureFrequency = frequency;
+  captureBaselineRevision = signalRevision;
+  captureEnabled = true;
+  captureStartedAt = millis();
+
+  JsonDocument response;
+  response["success"] = true;
+  response["capturing"] = true;
+  response["frequency"] = captureFrequency;
+  response["baseline_revision"] = captureBaselineRevision;
+  response["timeout_ms"] = CAPTURE_TIMEOUT_MS;
+  sendJsonDocument(200, response);
+}
+
+
+void handleApiCapturedSignal() {
+  const bool ready =
+    hasSavedSignal &&
+    signalRevision > captureBaselineRevision;
+
+  JsonDocument doc;
+  doc["success"] = true;
+  doc["capturing"] = captureEnabled;
+  doc["ready"] = ready;
+  doc["revision"] = signalRevision;
+  doc["frequency"] = ready ? savedFrequency : captureFrequency;
+  doc["protocol"] = ready ? savedProtocol : "";
+
+  if (ready) {
+    JsonArray raw = doc["raw"].to<JsonArray>();
+
+    for (uint16_t i = 0; i < savedRawLength; i++) {
+      raw.add(savedRaw[i]);
+    }
+  }
+
+  sendJsonDocument(200, doc);
 }
 
 
@@ -3053,6 +3122,30 @@ void setup() {
     HTTP_POST,
 
     handleApiIR
+
+  );
+
+
+
+  server.on(
+
+    "/api/ir/capture/start",
+
+    HTTP_POST,
+
+    handleApiCaptureStart
+
+  );
+
+
+
+  server.on(
+
+    "/api/ir/capture",
+
+    HTTP_GET,
+
+    handleApiCapturedSignal
 
   );
 

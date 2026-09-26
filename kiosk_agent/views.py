@@ -7,9 +7,14 @@ import redis
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.conf import settings
+from django.contrib.admin.views.decorators import staff_member_required
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
-from django.http import HttpResponse, HttpResponseForbidden
+from django.db.models import F
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
+from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
+from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import TemplateView
 from rest_framework import parsers, status
 from rest_framework.response import Response
@@ -17,19 +22,28 @@ from rest_framework.views import APIView
 
 from .ac_control import (
     ACControlError,
+    AC_PROTOCOL_CONFIG,
+    AC_STATE_FIELDS,
     accept_esp32_state_sync,
+    protocol_capabilities,
+    protocol_defaults,
     serialize_ac_state,
     set_ac_state,
 )
 from .core.agent_engine import stay_group
 from .core.realtime import create_realtime_call
 from .core.tools import TOOL_MODELS, execute_tool
+from .device_discovery import DeviceDiscoveryError, discover_identity_devices
+from .ir_capture import IRCaptureError, read_ir_capture, start_ir_capture
 from .models import (
     ACState,
     ChaletConfig,
     KioskAuditLog,
     KioskMessage,
     RealtimeSession,
+    RemoteButton,
+    RemoteButtonIcon,
+    RemoteButtonKey,
     RemoteControl,
 )
 from .permissions import (
@@ -49,6 +63,373 @@ from .serializers import (
     RemoteControlPublicSerializer,
 )
 from .services import AgentBusyError, enqueue_message
+
+
+def _serialize_config_button(button):
+    return {
+        "id": button.pk,
+        "key": button.key,
+        "label": button.label,
+        "icon": button.icon,
+        "row": button.row,
+        "column": button.column,
+        "sort_order": button.sort_order,
+        "command_url": button.command_url,
+        "ir_id": button.ir_id,
+        "frequency": button.frequency,
+        "raw": button.raw,
+        "is_active": button.is_active,
+        "requires_confirmation": button.requires_confirmation,
+        "configured": button.is_configured,
+    }
+
+
+@staff_member_required
+def button_config_view(request):
+    remotes = list(
+        RemoteControl.objects.order_by("sort_order", "name").values(
+            "id", "name", "location", "device_type"
+        )
+    )
+    return render(
+        request,
+        "kiosk_agent/button_config.html",
+        {
+            "remotes": remotes,
+            "key_choices": [
+                {"value": value, "label": label} for value, label in RemoteButtonKey.choices
+            ],
+            "icon_choices": [
+                {"value": value, "label": label} for value, label in RemoteButtonIcon.choices
+            ],
+        },
+    )
+
+
+@staff_member_required
+@require_GET
+def button_config_data_view(request, remote_id):
+    remote = get_object_or_404(RemoteControl, pk=remote_id)
+    ac_config = None
+    if remote.device_type == RemoteControl.DeviceType.AC:
+        state, _ = ACState.objects.get_or_create(device=remote)
+        ac_config = {
+            "protocol": remote.protocol,
+            "brand": remote.brand,
+            "model": remote.protocol_model,
+            "state": serialize_ac_state(state),
+            "state_version": state.state_version,
+            "visibility": {
+                field: (remote.ac_control_visibility or {}).get(field, True)
+                for field in AC_STATE_FIELDS
+            },
+            "protocols": [
+                {
+                    "value": value,
+                    "label": label,
+                    "brand": protocol_defaults(value)[0],
+                    "brand_label": RemoteControl.Brand(protocol_defaults(value)[0]).label,
+                    "model": protocol_defaults(value)[1],
+                    "model_label": RemoteControl.ProtocolModel(protocol_defaults(value)[1]).label,
+                    "capabilities": protocol_capabilities(value),
+                }
+                for value, label in RemoteControl.Protocol.choices
+                if value in AC_PROTOCOL_CONFIG
+            ],
+        }
+    return JsonResponse(
+        {
+            "remote": {
+                "id": remote.pk,
+                "name": remote.name,
+                "location": remote.location,
+                "device_type": remote.device_type,
+                "device_name": remote.device_name,
+                "device_ip": str(remote.device_ip or ""),
+                "can_capture": bool(remote.device_ip),
+                "is_active": remote.is_active,
+                "guest_visible": remote.guest_visible,
+                "voice_enabled": remote.voice_enabled,
+            },
+            "ac": ac_config,
+            "buttons": [
+                _serialize_config_button(button)
+                for button in remote.buttons.order_by("sort_order", "row", "column", "id")
+            ],
+        }
+    )
+
+
+def _capture_error_response(exc):
+    status_map = {
+        "device_unavailable": 400,
+        "invalid_frequency": 400,
+        "timeout": 504,
+        "network_error": 502,
+        "controller_error": 502,
+        "invalid_response": 502,
+    }
+    return JsonResponse(
+        {"success": False, "code": exc.code, "detail": exc.message},
+        status=status_map.get(exc.code, 400),
+    )
+
+
+@staff_member_required
+@require_POST
+def button_capture_start_view(request, remote_id):
+    remote = get_object_or_404(RemoteControl, pk=remote_id)
+    try:
+        payload = json.loads(request.body or "{}")
+        frequency = int(payload.get("frequency", 38))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"detail": "Frequency must be an integer."}, status=400)
+    try:
+        result = start_ir_capture(remote, frequency)
+    except IRCaptureError as exc:
+        return _capture_error_response(exc)
+    return JsonResponse({"success": True, **result})
+
+
+@staff_member_required
+@require_GET
+def button_capture_status_view(request, remote_id):
+    remote = get_object_or_404(RemoteControl, pk=remote_id)
+    try:
+        result = read_ir_capture(remote)
+    except IRCaptureError as exc:
+        return _capture_error_response(exc)
+    return JsonResponse({"success": True, **result})
+
+
+def _button_validation_error(exc):
+    if hasattr(exc, "message_dict"):
+        return exc.message_dict
+    return {"buttons": exc.messages}
+
+
+@staff_member_required
+@require_POST
+def button_config_save_view(request, remote_id):
+    try:
+        payload = json.loads(request.body)
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return JsonResponse({"detail": "Invalid JSON payload."}, status=400)
+    rows = payload.get("buttons") if isinstance(payload, dict) else None
+    remote_settings = payload.get("remote") if isinstance(payload, dict) else None
+    if not isinstance(rows, list) or len(rows) > 100:
+        return JsonResponse({"detail": "Provide no more than 100 buttons."}, status=400)
+    remote_fields = ("is_active", "guest_visible", "voice_enabled")
+    if remote_settings is not None and (
+        not isinstance(remote_settings, dict)
+        or any(not isinstance(remote_settings.get(field), bool) for field in remote_fields)
+        or not isinstance(remote_settings.get("device_name"), str)
+        or len(remote_settings.get("device_name", "")) > 120
+    ):
+        return JsonResponse({"detail": "Invalid remote settings."}, status=400)
+
+    with transaction.atomic():
+        remote = get_object_or_404(RemoteControl.objects.select_for_update(), pk=remote_id)
+        if not rows and remote.device_type != RemoteControl.DeviceType.AC:
+            return JsonResponse({"detail": "Provide at least one button."}, status=400)
+        if remote_settings is None:
+            remote_settings = {field: getattr(remote, field) for field in remote_fields}
+            remote_settings["device_name"] = remote.device_name
+        if remote.device_type == RemoteControl.DeviceType.AC:
+            protocol = remote_settings.get("protocol")
+            if protocol not in AC_PROTOCOL_CONFIG:
+                return JsonResponse({"detail": "Choose a supported AC protocol."}, status=400)
+            visibility = remote_settings.get("ac_control_visibility", {})
+            if (
+                not isinstance(visibility, dict)
+                or set(visibility) - set(AC_STATE_FIELDS)
+                or any(not isinstance(value, bool) for value in visibility.values())
+            ):
+                return JsonResponse({"detail": "Invalid AC control visibility settings."}, status=400)
+        else:
+            protocol = ""
+            visibility = {}
+        existing = list(remote.buttons.select_for_update())
+        existing_by_id = {button.pk: button for button in existing}
+        submitted_ids = []
+        buttons = []
+        positions = set()
+        keys = set()
+
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                return JsonResponse({"detail": f"Button {index + 1} must be an object."}, status=400)
+            button_id = row.get("id")
+            if button_id in (None, ""):
+                button = RemoteButton(remote=remote)
+            else:
+                try:
+                    button_id = int(button_id)
+                except (TypeError, ValueError):
+                    return JsonResponse({"detail": f"Button {index + 1} has an invalid id."}, status=400)
+                button = existing_by_id.get(button_id)
+                if button is None or button_id in submitted_ids:
+                    return JsonResponse({"detail": "The button list is stale. Reload and try again."}, status=409)
+                submitted_ids.append(button_id)
+
+            try:
+                button.key = str(row.get("key", "")).strip()
+                button.label = str(row.get("label", "")).strip()
+                button.icon = str(row.get("icon", "")).strip()
+                button.row = int(row.get("row", 0))
+                button.column = int(row.get("column", 0))
+                button.sort_order = int(row.get("sort_order", index))
+                button.command_url = str(row.get("command_url", "")).strip()
+                button.ir_id = int(row.get("ir_id", 1))
+                button.frequency = int(row.get("frequency", 38))
+                button.raw = row.get("raw", [])
+                button.is_active = row.get("is_active") is True
+                button.requires_confirmation = row.get("requires_confirmation") is True
+                button.full_clean(validate_unique=False, validate_constraints=False)
+            except (TypeError, ValueError, ValidationError) as exc:
+                errors = _button_validation_error(exc) if isinstance(exc, ValidationError) else {"buttons": [str(exc)]}
+                return JsonResponse(
+                    {"detail": f"Check button {index + 1}.", "errors": errors},
+                    status=400,
+                )
+
+            position = (button.row, button.column)
+            if position in positions:
+                return JsonResponse({"detail": "Each button must have a unique grid position."}, status=400)
+            if button.key in keys:
+                return JsonResponse({"detail": "Each button must have a unique action."}, status=400)
+            positions.add(position)
+            keys.add(button.key)
+            buttons.append(button)
+
+        if set(submitted_ids) != set(existing_by_id):
+            return JsonResponse({"detail": "The button list is stale. Reload and try again."}, status=409)
+
+        # Move persisted rows into a disjoint temporary area so action and position
+        # swaps cannot trip immediate database uniqueness constraints.
+        for button in existing:
+            RemoteButton.objects.filter(pk=button.pk).update(key=f"temporary-{button.pk}")
+        max_row = max((button.row for button in existing), default=0)
+        RemoteButton.objects.filter(remote=remote).update(row=F("row") + max_row + 1000)
+
+        for button in buttons:
+            button.save()
+
+        for field in remote_fields:
+            setattr(remote, field, remote_settings[field])
+        remote.device_name = remote_settings["device_name"].strip()
+        remote.protocol = protocol
+        remote.brand, remote.protocol_model = protocol_defaults(protocol)
+        remote.ac_control_visibility = visibility
+        remote.save(
+            update_fields=(
+                *remote_fields,
+                "device_name",
+                "protocol",
+                "brand",
+                "protocol_model",
+                "ac_control_visibility",
+                "updated_at",
+            )
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "buttons": [_serialize_config_button(button) for button in buttons],
+        }
+    )
+
+
+@staff_member_required
+@require_POST
+def button_config_ac_test_view(request, remote_id):
+    try:
+        payload = json.loads(request.body or "{}")
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return JsonResponse({"detail": "Invalid JSON payload."}, status=400)
+    state = payload.get("state") if isinstance(payload, dict) else None
+    if not isinstance(state, dict):
+        return JsonResponse({"detail": "AC state must be an object."}, status=400)
+    try:
+        confirmed = set_ac_state(remote_id, state)
+    except ACControlError as exc:
+        status_map = {
+            "not_found": 404,
+            "wrong_type": 400,
+            "unconfigured": 400,
+            "invalid_state": 400,
+            "timeout": 504,
+            "network_error": 502,
+            "controller_error": 502,
+            "invalid_response": 502,
+            "stale_response": 409,
+        }
+        return JsonResponse(
+            {"success": False, "code": exc.code, "detail": exc.message},
+            status=status_map.get(exc.code, 400),
+        )
+    return JsonResponse(
+        {
+            "success": True,
+            "state": serialize_ac_state(confirmed),
+            "state_version": confirmed.state_version,
+        }
+    )
+
+
+@staff_member_required
+@require_POST
+def button_config_sync_ip_view(request, remote_id):
+    remote = get_object_or_404(RemoteControl, pk=remote_id)
+    try:
+        payload = json.loads(request.body or "{}")
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return JsonResponse({"detail": "Invalid JSON payload."}, status=400)
+    device_name = payload.get("device_name") if isinstance(payload, dict) else None
+    if not isinstance(device_name, str) or not device_name.strip() or len(device_name) > 120:
+        return JsonResponse({"detail": "Enter a valid Device name."}, status=400)
+
+    remote.device_name = device_name.strip()
+    remote.save(update_fields=("device_name", "updated_at"))
+    try:
+        devices = discover_identity_devices()
+    except DeviceDiscoveryError as exc:
+        return JsonResponse({"detail": str(exc)}, status=503)
+
+    key = remote.device_name.casefold()
+    matches = [device for device in devices if device["name"].strip().casefold() == key]
+    if not matches:
+        return JsonResponse({"detail": f'Device "{remote.device_name}" was not found.'}, status=404)
+    if len(matches) > 1:
+        return JsonResponse({"detail": "Multiple devices reported the same Device name."}, status=409)
+
+    device = matches[0]
+    if (
+        remote.device_type == RemoteControl.DeviceType.AC
+        and "ac_control" not in device.get("capabilities", [])
+    ):
+        return JsonResponse(
+            {"detail": "The device firmware does not advertise AC control support."},
+            status=409,
+        )
+    remote.device_ip = device["ip"]
+    remote.device_last_seen_at = timezone.now()
+    command_url = f"http://{remote.device_ip}/ir"
+    with transaction.atomic():
+        remote.save(update_fields=("device_ip", "device_last_seen_at", "updated_at"))
+        updated_buttons = remote.buttons.update(command_url=command_url)
+    return JsonResponse(
+        {
+            "success": True,
+            "device_name": remote.device_name,
+            "device_ip": str(remote.device_ip),
+            "command_url": command_url,
+            "updated_buttons": updated_buttons,
+            "firmware_version": device.get("firmware_version", ""),
+            "capabilities": device.get("capabilities", []),
+        }
+    )
 
 
 class KioskPageView(TemplateView):
