@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 
@@ -6,7 +7,30 @@ from kiosk_agent.core.prompt_builder import build_system_prompt
 from kiosk_agent.core.realtime import build_realtime_session
 from kiosk_agent.core.tools import execute_tool, openai_tool_schemas
 from kiosk_agent.core.voice import clean_spoken_text, split_spoken_text
-from kiosk_agent.models import ChaletConfig, KioskAuditLog, StaffRequest
+from kiosk_agent.models import (
+    ACState,
+    ChaletConfig,
+    KioskAuditLog,
+    RemoteButton,
+    RemoteControl,
+    StaffRequest,
+)
+
+
+AC_NULL_FIELDS = {
+    "power": None,
+    "mode": None,
+    "temperature": None,
+    "fan": None,
+    "swing_vertical": None,
+    "swing_horizontal": None,
+    "turbo": None,
+    "sleep": None,
+    "eco": None,
+    "quiet": None,
+    "light": None,
+    "x_fan": None,
+}
 
 
 class AgentToolTests(TestCase):
@@ -57,6 +81,12 @@ class AgentToolTests(TestCase):
             parameters = item["function"]["parameters"]
             self.assertEqual(set(parameters["properties"]), set(parameters["required"]))
 
+    def test_prompt_defines_safe_room_control_workflow(self):
+        prompt = build_system_prompt(self.config)
+        self.assertIn("call list_remote_controls first", prompt)
+        self.assertIn("never confirm on the guest's behalf", prompt)
+        self.assertIn("Supply null for fields the guest did not request", prompt)
+
     def test_staff_request_urgency_is_required(self):
         result = execute_tool(
             "request_property_staff",
@@ -87,6 +117,172 @@ class AgentToolTests(TestCase):
             request_id="00000000-0000-0000-0000-000000000001",
         )
         self.assertEqual(json.loads(result)["error"], "validation_error")
+
+    def test_remote_catalog_only_contains_voice_enabled_controls(self):
+        hidden = RemoteControl.objects.create(name="Hidden", slug="hidden", voice_enabled=False)
+        RemoteButton.objects.create(
+            remote=hidden,
+            key="power",
+            label="Power",
+            command_url="http://192.168.1.5/ir",
+            raw=[9000, 4500],
+        )
+        allowed = RemoteControl.objects.create(
+            name="Living fan",
+            slug="living-fan-agent",
+            location="Living room",
+            voice_enabled=True,
+        )
+        button = RemoteButton.objects.create(
+            remote=allowed,
+            key="power",
+            label="Power",
+            command_url="http://192.168.1.6/ir",
+            raw=[9000, 4500],
+            requires_confirmation=True,
+        )
+
+        result = json.loads(execute_tool(
+            "list_remote_controls",
+            "{}",
+            stay_id=str(self.config.current_stay_id),
+            request_id="00000000-0000-0000-0000-000000000001",
+        ))["result"]
+
+        self.assertEqual(len(result["devices"]), 1)
+        self.assertEqual(result["devices"][0]["name"], "Living fan")
+        self.assertEqual(result["devices"][0]["buttons"][0]["button_id"], button.pk)
+        self.assertNotIn("command_url", str(result))
+        self.assertNotIn("9000", str(result))
+
+    @patch("kiosk_agent.remote_control.httpx.Client")
+    def test_sensitive_remote_button_requires_a_later_turn_confirmation(self, client_cls):
+        remote = RemoteControl.objects.create(
+            name="Pool light",
+            slug="pool-light-agent",
+            voice_enabled=True,
+        )
+        button = RemoteButton.objects.create(
+            remote=remote,
+            key="off",
+            label="Turn off",
+            command_url="http://192.168.1.7/ir",
+            raw=[9000, 4500],
+            requires_confirmation=True,
+        )
+        first_request = "00000000-0000-0000-0000-000000000001"
+        first = json.loads(execute_tool(
+            "press_remote_button",
+            json.dumps({"button_id": button.pk, "confirmation_token": ""}),
+            stay_id=str(self.config.current_stay_id),
+            request_id=first_request,
+        ))["result"]
+        self.assertTrue(first["confirmation_required"])
+        client_cls.assert_not_called()
+
+        same_turn = json.loads(execute_tool(
+            "press_remote_button",
+            json.dumps({
+                "button_id": button.pk,
+                "confirmation_token": first["confirmation_token"],
+            }),
+            stay_id=str(self.config.current_stay_id),
+            request_id=first_request,
+        ))["result"]
+        self.assertTrue(same_turn["confirmation_required"])
+        client_cls.assert_not_called()
+
+        response = type("Response", (), {})()
+        response.status_code = 200
+        response.json = lambda: {"status": "success"}
+        client_cls.return_value.__enter__.return_value.post.return_value = response
+        confirmed = json.loads(execute_tool(
+            "press_remote_button",
+            json.dumps({
+                "button_id": button.pk,
+                "confirmation_token": first["confirmation_token"],
+            }),
+            stay_id=str(self.config.current_stay_id),
+            request_id="00000000-0000-0000-0000-000000000002",
+        ))["result"]
+        self.assertTrue(confirmed["pressed"])
+        client_cls.assert_called_once()
+
+    def test_voice_disabled_button_cannot_be_pressed_by_agent(self):
+        remote = RemoteControl.objects.create(
+            name="Admin only",
+            slug="admin-only-agent",
+            voice_enabled=False,
+        )
+        button = RemoteButton.objects.create(
+            remote=remote,
+            key="power",
+            label="Power",
+            command_url="http://192.168.1.8/ir",
+            raw=[9000, 4500],
+        )
+        result = json.loads(execute_tool(
+            "press_remote_button",
+            json.dumps({"button_id": button.pk, "confirmation_token": ""}),
+            stay_id=str(self.config.current_stay_id),
+            request_id="00000000-0000-0000-0000-000000000001",
+        ))["result"]
+        self.assertFalse(result["pressed"])
+        self.assertEqual(result["reason"], "forbidden")
+
+    @patch("kiosk_agent.core.tools.set_ac_state")
+    def test_agent_ac_control_sends_only_requested_visible_changes(self, set_state):
+        device = RemoteControl.objects.create(
+            name="Bedroom AC",
+            slug="bedroom-ac-agent",
+            location="Bedroom",
+            device_type=RemoteControl.DeviceType.AC,
+            device_name="ESP32 Bedroom",
+            device_ip="192.168.1.9",
+            brand="gree",
+            protocol="gree",
+            protocol_model="yaw1f",
+            voice_enabled=True,
+            ac_control_visibility={"eco": False},
+        )
+        state = ACState.objects.create(device=device, power=True, temperature=22, state_version=4)
+        set_state.return_value = state
+        arguments = {**AC_NULL_FIELDS, "device_id": device.pk, "temperature": 22}
+
+        result = json.loads(execute_tool(
+            "set_air_conditioner",
+            json.dumps(arguments),
+            stay_id=str(self.config.current_stay_id),
+            request_id="00000000-0000-0000-0000-000000000001",
+        ))["result"]
+
+        self.assertTrue(result["applied"])
+        set_state.assert_called_once_with(
+            device.pk,
+            {"temperature": 22},
+            request_id="00000000-0000-0000-0000-000000000001",
+        )
+        audit = KioskAuditLog.objects.get(event=KioskAuditLog.Event.REMOTE_PRESSED)
+        self.assertEqual(audit.details["changed_fields"], ["temperature"])
+
+    def test_agent_ac_control_rejects_hidden_capability(self):
+        device = RemoteControl.objects.create(
+            name="Bedroom AC",
+            slug="bedroom-ac-hidden-feature",
+            device_type=RemoteControl.DeviceType.AC,
+            protocol="gree",
+            voice_enabled=True,
+            ac_control_visibility={"eco": False},
+        )
+        arguments = {**AC_NULL_FIELDS, "device_id": device.pk, "eco": True}
+        result = json.loads(execute_tool(
+            "set_air_conditioner",
+            json.dumps(arguments),
+            stay_id=str(self.config.current_stay_id),
+            request_id="00000000-0000-0000-0000-000000000001",
+        ))["result"]
+        self.assertFalse(result["applied"])
+        self.assertEqual(result["reason"], "unsupported_or_hidden_control")
 
     def test_voice_text_is_cleaned_and_split_for_streaming(self):
         clean = clean_spoken_text("أهلاً **بك** 🌴. كيف يمكنني خدمتك؟")

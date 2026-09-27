@@ -118,7 +118,12 @@ def _audit(
         logger.warning("Failed to write remote audit log: %s", exc)
 
 
-def _load_pressable_button(button_id: int, *, require_guest_visible: bool) -> RemoteButton:
+def _load_pressable_button(
+    button_id: int,
+    *,
+    require_guest_visible: bool,
+    require_voice_enabled: bool,
+) -> RemoteButton:
     try:
         button = (
             RemoteButton.objects.select_related("remote")
@@ -131,15 +136,32 @@ def _load_pressable_button(button_id: int, *, require_guest_visible: bool) -> Re
     if require_guest_visible and not button.remote.guest_visible:
         raise RemoteCommandError("forbidden", "Remote is not available on the kiosk.")
 
+    if require_voice_enabled and not button.remote.voice_enabled:
+        raise RemoteCommandError("forbidden", "Remote is not enabled for voice control.")
+
     if not button.is_configured:
         raise RemoteCommandError("unconfigured", "Button has no complete IR command.")
 
     try:
-        validate_command_url(button.command_url)
+        validate_command_url(button.target_command_url)
         validate_ir_command(button.ir_id, button.frequency, button.raw)
     except ValidationError as exc:
         raise RemoteCommandError("invalid_command", "; ".join(exc.messages)) from exc
     return button
+
+
+def get_pressable_remote_button(
+    button_id: int,
+    *,
+    require_guest_visible: bool = False,
+    require_voice_enabled: bool = False,
+) -> RemoteButton:
+    """Resolve a safe stored command without exposing its URL or IR payload."""
+    return _load_pressable_button(
+        button_id,
+        require_guest_visible=require_guest_visible,
+        require_voice_enabled=require_voice_enabled,
+    )
 
 
 def press_remote_button(
@@ -149,10 +171,15 @@ def press_remote_button(
     stay_id=None,
     request_id=None,
     require_guest_visible: bool = False,
+    require_voice_enabled: bool = False,
 ) -> dict:
     """POST a stored IR command server-side. Command data never comes from the guest request."""
     close_old_connections()
-    button = _load_pressable_button(button_id, require_guest_visible=require_guest_visible)
+    button = _load_pressable_button(
+        button_id,
+        require_guest_visible=require_guest_visible,
+        require_voice_enabled=require_voice_enabled,
+    )
     url = validate_command_url(button.target_command_url)
     payload = validate_ir_command(button.ir_id, button.frequency, button.raw)
 

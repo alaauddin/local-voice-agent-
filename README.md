@@ -49,6 +49,20 @@ run `sudo systemctl disable --now sunset-kiosk.service`.
 Configure the singleton chalet row at `/admin/`. Its `chalet_number` is injected into the system
 prompt and is never requested from the guest.
 
+## AI room controls
+
+The text and Realtime agents can control remotes that an administrator has explicitly marked
+`voice_enabled`. Before acting, the agent reads a guest-safe catalog containing device names,
+locations, available button IDs, AC state, and AC capabilities. Controller URLs, IP addresses, and
+raw IR timings are never sent to the model.
+
+RAW remotes execute only commands already stored in Django. Buttons marked
+`requires_confirmation` use a signed, two-turn confirmation token: the initial tool call cannot
+transmit, and the token cannot be used until a later guest turn. AC requests send only the fields
+the guest asked to change, then persist and report the exact state confirmed by the ESP32. Failed
+or timed-out physical commands are not retried automatically. Remote and AC outcomes are written
+to the kiosk audit log without IR payloads or controller URLs.
+
 ## API and socket contract
 
 - `POST /api/v1/kiosk/chat/` with `{"message": "..."}` returns HTTP 202.
