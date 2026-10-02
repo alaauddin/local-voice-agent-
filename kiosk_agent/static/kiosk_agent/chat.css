@@ -1299,6 +1299,63 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
   .remote-grid { grid-auto-rows: minmax(58px, auto); }
 }
 
+/* Realtime assistant card inspired by the resort dashboard. */
+.welcome {
+  position: relative;
+  padding: clamp(14px, 2vw, 24px) clamp(16px, 2.2vw, 28px) clamp(22px, 2.5vw, 34px);
+  overflow: visible;
+  background: radial-gradient(circle at 16% 8%, rgba(117,201,193,.13), transparent 30%), linear-gradient(165deg, rgba(255,255,255,.97), rgba(250,246,239,.96));
+  border: 1px solid rgba(255,255,255,.9);
+  border-radius: 30px;
+  box-shadow: 0 22px 60px rgba(55,75,70,.13), inset 0 1px 0 rgba(255,255,255,.95);
+}
+.assistant-label { margin: 0 0 14px auto; color: #2d716d; background: rgba(234,247,244,.92); box-shadow: 0 5px 18px rgba(49,94,92,.07); }
+.voice-stage.has-remotes .avatar-stage, .avatar-stage {
+  width: min(100%, 510px);
+  margin: 0 auto -34px;
+  aspect-ratio: 1.08;
+  border: 1px solid rgba(255,255,255,.92);
+  border-radius: 26px;
+  box-shadow: 0 18px 42px rgba(49,94,92,.14);
+}
+.mic-button {
+  width: 74px; height: 74px; border-width: 5px;
+  background: linear-gradient(145deg, #58bdb3, #167e77);
+  box-shadow: 0 10px 28px rgba(22,126,119,.28), 0 0 0 7px rgba(117,201,193,.12);
+}
+.speak-prompt { margin: 10px auto 0; display: grid; justify-items: center; gap: 3px; color: #185f5b; animation: promptIn .28s ease-out; }
+.speak-prompt[hidden] { display: none; }
+.speak-prompt strong { font-size: 14px; font-weight: 700; }
+.speak-prompt small { color: #738783; font-size: 10px; }
+.voice-wave { height: 22px; margin-bottom: 2px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.voice-wave span {
+  width: 3px; height: 8px;
+  background: linear-gradient(#8fdad3, #2f9992);
+  border-radius: 999px;
+  animation: listenWave 1.05s ease-in-out infinite;
+}
+.voice-wave span:nth-child(2), .voice-wave span:nth-child(6) { animation-delay: -.8s; }
+.voice-wave span:nth-child(3), .voice-wave span:nth-child(5) { animation-delay: -.55s; }
+.voice-wave span:nth-child(4) { animation-delay: -.3s; }
+.ready-to-listen .mic-button .ring-one { opacity: .7; animation: micWave 1.8s infinite ease-out; }
+.ready-to-listen .mic-button .ring-two { opacity: .45; animation: micWave 1.8s .75s infinite ease-out; }
+.ready-to-listen .voice-status { color: #6b807c !important; }
+.welcome h2, .voice-stage.has-remotes .welcome h2 { margin-top: 14px; color: #173d3b; font-weight: 700; }
+
+@keyframes listenWave {
+  0%, 100% { height: 6px; opacity: .45; }
+  50% { height: 20px; opacity: 1; }
+}
+@keyframes promptIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 800px) {
+  .welcome { padding: 12px 12px 22px; border-radius: 24px; }
+  .voice-stage.has-remotes .avatar-stage, .avatar-stage { width: min(365px, 46vh, 90vw); height: auto; aspect-ratio: 1.04; margin-bottom: -31px; }
+  .mic-button { width: 68px; height: 68px; }
+}
+
 @keyframes workspaceIn {
   from { opacity: 0; transform: translateY(12px) scale(.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -1931,4 +1988,348 @@ dialog.remote-popup-dialog {
   .ac-control-power { width: 52px; height: 52px; min-height: 52px; }
   .ac-feature-controls { gap: 6px; }
   .ac-feature-controls .ac-control { min-height: 49px; padding-inline: 3px; }
+}
+
+
+/* Dashboard-style device controls: large control area, compact assistant card. */
+.remotes-panel {
+  background:
+    radial-gradient(circle at 8% 0, rgba(74,177,164,.22), transparent 30%),
+    linear-gradient(155deg, #0d5a54, #073d39 72%);
+  border-color: rgba(255,255,255,.16);
+  box-shadow: 0 28px 60px rgba(15,57,52,.25), inset 0 1px rgba(255,255,255,.12);
+}
+.remotes-header { align-items: center; margin-bottom: 18px; }
+.remotes-header small { color: #8edbd2; font-size: 10px; }
+.remotes-header strong { color: #fff; font-size: clamp(20px, 2vw, 27px); }
+.remote-location { color: #c1d9d5; font-size: 10px; }
+.remotes-carousel { padding: 14px; background: rgba(1,31,28,.2); border-color: rgba(255,255,255,.1); }
+.remotes-track { gap: 16px; }
+
+.remote-slide, .ac-remote-slide {
+  padding: 17px 16px 15px;
+  color: #173d3b;
+  background: linear-gradient(160deg, #fffefa, #f5f3ed);
+  border: 1px solid rgba(232,227,216,.95);
+  border-radius: 18px;
+  box-shadow: 0 12px 25px rgba(1,32,29,.18), inset 0 1px rgba(255,255,255,.95);
+}
+.remote-slide:hover { border-color: rgba(87,174,164,.42); box-shadow: 0 16px 30px rgba(1,32,29,.23); }
+.remote-slide-heading { min-height: 43px; margin-bottom: 13px; padding: 0 2px; }
+.remote-slide-heading strong { color: #173d3b; font-size: 13px; font-weight: 700; }
+.remote-slide-heading small { color: #7e918d; font-size: 8px; }
+.remote-heading-actions { flex-direction: row-reverse; }
+.remote-kind-badge { color: #4d6762; background: #edf1ef; border-color: #dfe7e4; }
+.remote-kind-badge.is-on { color: #168052; background: #e6f5ed; border-color: #c8ead8; }
+.remote-kind-badge.is-on::after { content: ""; width: 6px; height: 6px; margin-right: 4px; display: inline-block; background: #21a767; border-radius: 50%; }
+.remote-kind-badge.is-off { color: #71817e; background: #edf0ef; }
+.remote-open-button { min-width: 29px; padding: 4px 7px; color: #42635f; background: #eef2f0; border-color: #dfe7e4; font: 700 10px/1 Arial, sans-serif; }
+.remote-open-button:hover { color: #fff; background: #267f78; }
+
+.ac-state { padding: 0; gap: 12px; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+.ac-lcd {
+  min-height: 128px;
+  padding: 14px 16px;
+  color: #173d3b;
+  background: linear-gradient(150deg, #fbfcf8, #edf2ed);
+  border: 1px solid #e1e7e2;
+  border-radius: 14px;
+  box-shadow: inset 0 1px rgba(255,255,255,.95);
+}
+.ac-state[data-power="off"] .ac-lcd { filter: none; opacity: .8; }
+.ac-lcd-temperature, .ac-lcd-temperature .ac-temperature { color: #123c3b; }
+.ac-lcd-temperature .ac-temperature { font-size: 46px; }
+.ac-lcd-details { border-color: #dce5e0; }
+.ac-lcd-details .ac-state-item small, .ac-lcd-details .ac-state-item strong { color: #66807a; }
+.ac-lcd-details .ac-state-item strong { color: #254d48; }
+.ac-lcd-features { border-color: #dce5e0; }
+.ac-control-deck { gap: 9px; padding: 0; }
+.ac-group-label, .ac-control-copy small { color: #78908b; }
+.ac-control, .ac-feature-controls .ac-control {
+  color: #315a55;
+  background: linear-gradient(145deg, #fff, #f1f3ef);
+  border: 1px solid #e1e6e1;
+  box-shadow: 0 5px 12px rgba(42,75,69,.08), inset 0 1px #fff;
+}
+.ac-control:hover:not(:disabled) { border-color: #65afa6; box-shadow: 0 7px 15px rgba(42,75,69,.13); }
+.ac-control-icon, .ac-feature-controls .ac-control-icon { color: #376f68; }
+.ac-control-cooler { color: #257ca3; background: #eef8fb; border-color: #d7eaf2; }
+.ac-control-warmer { color: #b76b24; background: #fff5e8; border-color: #f3dfc4; }
+.ac-control-mode .ac-control-icon, .ac-control-fan .ac-control-icon { background: #eaf2ef; }
+.ac-feature-controls .ac-control.is-active { color: #15523d; background: linear-gradient(145deg, #dff5e8, #bce6d0); border-color: #a8d9c0; box-shadow: 0 5px 12px rgba(31,118,79,.13); }
+.ac-control-power.will-start, .ac-control-power.will-start.is-active { color: #fff; background: linear-gradient(145deg, #31c18a, #12976e); border-color: #9be3c8; }
+.ac-control-power.will-stop, .ac-control-power.will-stop.is-active { color: #fff; background: linear-gradient(145deg, #ffb34f, #ea8725); border-color: #ffd195; }
+
+.remote-grid { gap: 10px; grid-auto-rows: minmax(64px, auto); }
+.remote-button {
+  width: min(72px, 100%);
+  min-height: 62px;
+  color: #264f4a;
+  background: linear-gradient(145deg, #fff, #f0f2ee);
+  border-color: #dfe6e1;
+  box-shadow: 0 6px 14px rgba(42,75,69,.1), inset 0 1px #fff;
+}
+.remote-button span.icon { color: #167f77; }
+.remote-button-label { color: #526d68; }
+.remote-button[data-icon="power"] { color: #fff; background: linear-gradient(145deg, #31c18a, #12976e); border-color: #8fddbf; }
+.remote-button[data-icon="power"] span.icon, .remote-button[data-icon="power"] .remote-button-label { color: #fff; }
+
+@media (min-width: 801px) {
+  .voice-stage.has-remotes { grid-template-columns: minmax(220px, .52fr) minmax(520px, 1.48fr); gap: clamp(18px, 2vw, 30px); align-items: start; }
+  .voice-stage.has-remotes .welcome { max-width: 370px; padding: 12px 13px 20px; }
+  .voice-stage.has-remotes .avatar-stage { width: min(100%, 335px); margin-bottom: -30px; }
+  .voice-stage.has-remotes .mic-button { width: 64px; height: 64px; }
+  .voice-stage.has-remotes .welcome h2 { margin-top: 10px; font-size: clamp(17px, 1.5vw, 21px); }
+  .voice-stage.has-remotes .welcome > p:not(.voice-status):not(.interim-transcript) { font-size: 10px; line-height: 1.65; }
+  .voice-stage.has-remotes .suggestions { margin-top: 12px; gap: 6px; }
+  .voice-stage.has-remotes .suggestions button { padding: 7px 9px; font-size: 8px; }
+  .remotes-panel { width: 100%; max-width: none; height: min(820px, calc(100dvh - 112px)); min-height: 670px; margin-top: 0; padding: clamp(20px, 2vw, 28px); }
+}
+@media (min-width: 1121px) {
+  .voice-stage { width: min(1580px, 100%); }
+  .voice-stage.has-remotes { grid-template-columns: minmax(250px, .44fr) minmax(720px, 1.56fr); }
+  .remotes-track { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+}
+@media (max-width: 1120px) and (min-width: 801px) {
+  .remotes-track { grid-template-columns: 1fr; }
+}
+
+/* Reference dashboard palette and flat component finish. */
+:root {
+  --forest: #0b5954;
+  --forest-soft: #267f78;
+  --gold: #f3a13a;
+  --turquoise: #25b8aa;
+  --turquoise-soft: #e8f6f2;
+  --sand: #f2eadf;
+  --paper: #faf7f0;
+  --ink: #123e43;
+  --muted: #7b8e8c;
+  --line: #e7e3da;
+}
+
+body {
+  background:
+    radial-gradient(circle at 6% 58%, rgba(235,195,133,.18), transparent 22%),
+    radial-gradient(circle at 92% 18%, rgba(50,169,154,.09), transparent 25%),
+    #f3ece2;
+}
+
+.kiosk-shell,
+.chat-panel { background: #faf7f0; }
+.chat-panel { color: #123e43; }
+.voice-canvas {
+  background:
+    linear-gradient(rgba(250,247,240,.88), rgba(250,247,240,.88)),
+    radial-gradient(circle at 5% 65%, rgba(240,184,103,.16), transparent 25%);
+}
+
+.welcome {
+  color: #123e43;
+  background: #fbf8f2;
+  border-color: #efe8dc;
+  box-shadow: 0 18px 42px rgba(52,68,62,.11);
+}
+.assistant-label {
+  color: #246d68;
+  background: #edf7f4;
+  border-color: #dceee9;
+  box-shadow: none;
+}
+.assistant-label span { background: #1eb477; }
+.welcome h2,
+.voice-stage.has-remotes .welcome h2 { color: #103d43; }
+.welcome > p:not(.voice-status):not(.interim-transcript),
+.voice-status { color: #718784; }
+.suggestions button {
+  color: #326e69;
+  background: #fffdf9;
+  border-color: #eae5dd;
+  box-shadow: 0 5px 13px rgba(45,73,68,.06);
+}
+.suggestions button span { color: #25a89b; }
+.mic-button {
+  background: linear-gradient(145deg, #47c4b7, #168b82);
+  border-color: #d9f2ed;
+  box-shadow: 0 10px 28px rgba(22,139,130,.28), 0 0 0 7px rgba(51,185,172,.12);
+}
+
+.remotes-panel {
+  color: #fff;
+  background:
+    radial-gradient(ellipse at 5% -5%, rgba(68,161,150,.28), transparent 37%),
+    radial-gradient(ellipse at 95% 105%, rgba(1,42,39,.55), transparent 55%),
+    linear-gradient(145deg, #105f59 0%, #084b47 48%, #063d3a 100%);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 26px;
+  box-shadow: 0 24px 48px rgba(16,69,63,.22), inset 0 1px rgba(255,255,255,.12);
+}
+.remotes-header small { color: #79cbc2; }
+.remotes-header strong { color: #fff; }
+.remote-location { color: #bad9d5; }
+.remotes-carousel {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.remote-slide,
+.ac-remote-slide {
+  color: #123e43;
+  background: #fbfaf6;
+  border: 1px solid #e9e5dc;
+  border-radius: 16px;
+  box-shadow: 0 10px 22px rgba(2,35,32,.16);
+}
+.remote-slide:hover {
+  border-color: #d8e4df;
+  box-shadow: 0 12px 25px rgba(2,35,32,.19);
+}
+.remote-slide-heading strong { color: #123e43; }
+.remote-slide-heading small { color: #82918f; }
+.remote-kind-badge {
+  color: #657b78;
+  background: #edf1ef;
+  border-color: #e0e6e2;
+}
+.remote-kind-badge.is-on {
+  color: #168158;
+  background: #e7f5ed;
+  border-color: #d0eadb;
+}
+.remote-kind-badge.is-on::after { background: #20aa69; }
+.remote-kind-badge.is-off {
+  color: #73817f;
+  background: #edf0ef;
+  border-color: #e0e4e2;
+}
+.remote-open-button {
+  color: #315f5b;
+  background: #eef2f0;
+  border-color: #dfe6e3;
+  box-shadow: none;
+}
+.remote-open-button:hover { color: #fff; background: #147b73; }
+
+.ac-state,
+.remote-popup-content .ac-state {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.ac-lcd,
+.remote-popup-content .ac-lcd {
+  color: #123e43;
+  background: #f7f8f4;
+  border: 1px solid #e8ebe5;
+  border-radius: 13px;
+  box-shadow: none;
+}
+.ac-state[data-power="off"] .ac-lcd { opacity: .82; filter: none; }
+.ac-lcd-temperature,
+.ac-lcd-temperature .ac-temperature { color: #103d43; }
+.ac-lcd-details { border-color: #e0e6e1; }
+.ac-lcd-details .ac-state-item small { color: #80918e; }
+.ac-lcd-details .ac-state-item strong { color: #28504c; }
+.ac-lcd-features { border-color: #e0e6e1; }
+.ac-lcd-features span { color: #236a64; background: #e9f3ef; }
+.ac-power,
+.ac-power.is-off { color: #70827f; }
+.ac-power.is-on,
+.ac-state[data-power="on"] .ac-power { color: #168158; }
+
+.ac-group-label,
+.ac-control-copy small { color: #7b8e8b; }
+.ac-features-label { border-color: #e4e8e4; }
+.ac-control,
+.ac-feature-controls .ac-control {
+  color: #315c58;
+  background: #f8f8f4;
+  border: 1px solid #e4e7e2;
+  box-shadow: 0 4px 10px rgba(42,75,69,.07);
+}
+.ac-control:hover:not(:disabled) {
+  color: #155c55;
+  background: #fff;
+  border-color: #9ccbc4;
+  box-shadow: 0 6px 13px rgba(42,75,69,.11);
+}
+.ac-control-icon,
+.ac-feature-controls .ac-control-icon { color: #246f68; }
+.ac-control-cooler {
+  color: #237ba0;
+  background: #eef8fb;
+  border-color: #dcecf2;
+}
+.ac-control-warmer {
+  color: #af6823;
+  background: #fff4e6;
+  border-color: #f1dfc7;
+}
+.ac-control-mode .ac-control-icon,
+.ac-control-fan .ac-control-icon { color: #236f68; background: #e8f2ef; }
+.ac-feature-controls .ac-control.is-active {
+  color: #14513f;
+  background: #dff3e8;
+  border-color: #b9dec9;
+  box-shadow: 0 4px 10px rgba(31,118,79,.1);
+}
+.ac-control-power.will-start,
+.ac-control-power.will-start.is-active {
+  color: #fff;
+  background: linear-gradient(145deg, #28bd8a, #0b9c72);
+  border-color: #7fd6b6;
+  box-shadow: 0 7px 15px rgba(11,156,114,.24);
+}
+.ac-control-power.will-stop,
+.ac-control-power.will-stop.is-active {
+  color: #fff;
+  background: linear-gradient(145deg, #ffb64c, #ef9229);
+  border-color: #ffd08c;
+  box-shadow: 0 7px 15px rgba(239,146,41,.23);
+}
+
+.remote-button {
+  color: #28534f;
+  background: #f8f8f4;
+  border-color: #e4e7e2;
+  border-radius: 13px;
+  box-shadow: 0 4px 10px rgba(42,75,69,.07);
+}
+.remote-button span.icon { color: #167c74; text-shadow: none; }
+.remote-button-label { color: #536e6a; }
+.remote-button:hover:not(:disabled) {
+  color: #124f49;
+  background: #fff;
+  border-color: #9ccbc4;
+  box-shadow: 0 6px 13px rgba(42,75,69,.11);
+}
+.remote-button[data-icon="power"] {
+  color: #fff;
+  background: linear-gradient(145deg, #28bd8a, #0b9c72);
+  border-color: #7fd6b6;
+  border-radius: 13px;
+  box-shadow: 0 7px 15px rgba(11,156,114,.2);
+}
+.remote-button[data-icon="power"] span.icon,
+.remote-button[data-icon="power"] .remote-button-label { color: #fff; }
+
+dialog.remote-popup-dialog {
+  color: #123e43;
+  background: #f8f4ec;
+  border-color: #e8e1d6;
+  box-shadow: 0 30px 90px rgba(4,31,29,.35);
+}
+.remote-popup-close {
+  color: #315f5b;
+  background: #e9efec;
+  border-color: #dce5e1;
+}
+.remote-popup-content .remote-slide { background: #fbfaf6; }
+
+@media (min-width: 801px) {
+  .voice-stage.has-remotes .welcome { background: #fbf8f2; }
+  .remotes-panel { padding: clamp(20px, 2vw, 28px); }
 }

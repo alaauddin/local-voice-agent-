@@ -9,6 +9,7 @@ import {
 import { resetAudio, receiveChunk, finishAudio } from "./tts.js";
 import { closeRealtime } from "./realtime.js";
 import { finishTurn } from "./conversation.js";
+import { voiceController } from "./voice-controller.js";
 
 export function connect() {
   const protocol = location.protocol === "https:" ? "wss" : "ws";
@@ -35,8 +36,19 @@ export function connect() {
 
 export function handleEvent(event) {
   const requestId = event.request_id || "current";
+  const voiceEvents = new Set([
+    "tts_status", "tts_audio", "tts_chunk_fallback", "tts_fallback", "tts_end",
+    "voice_status", "voice_chunk", "voice_fallback", "voice_completed", "voice_skipped",
+  ]);
+  if (voiceEvents.has(event.event)) {
+    if (state.backendVoiceRequestId && state.backendVoiceRequestId !== requestId) return;
+    state.backendVoiceRequestId = requestId;
+  }
   switch (event.event) {
-    case "accepted": setBusy(true); break;
+    case "accepted":
+      state.backendVoiceRequestId = requestId;
+      setBusy(true);
+      break;
     case "status": setBusy(true, event.status === "thinking" ? "يفكر في أفضل طريقة لخدمتك…" : "يجهّز لك الرد…"); break;
     case "token":
       streamFor(requestId).textContent += event.token;
@@ -48,26 +60,33 @@ export function handleEvent(event) {
       if (!target.textContent) target.textContent = event.content || "تمت خدمتك بكل سرور.";
       state.streams.delete(requestId);
       setBusy(true, "يحضّر الرد الصوتي…");
-      clearTimeout(state.completionTimer);
-      state.completionTimer = window.setTimeout(finishTurn, 4000);
+      voiceController.schedule("voice-completion-watchdog", finishTurn, 30000);
       break;
     }
     case "tts_status":
-      clearTimeout(state.completionTimer);
+    case "voice_status":
+      voiceController.cancelTimer("voice-completion-watchdog");
       resetAudio(event.nonce, event.total);
       setBusy(true, "يحضّر الرد الصوتي…");
       break;
     case "tts_audio": receiveChunk(event); break;
     case "tts_chunk_fallback": receiveChunk({ ...event, fallbackText: event.text }); break;
+    case "voice_chunk": receiveChunk({ ...event, fallbackText: event.fallback_text }); break;
     case "tts_fallback":
-      clearTimeout(state.completionTimer);
+    case "voice_fallback":
+      voiceController.cancelTimer("voice-completion-watchdog");
       resetAudio(event.nonce, 1);
       receiveChunk({ ...event, seq: 0, total: 1, fallbackText: event.text });
       finishAudio({ ...event, total: 1 });
       break;
     case "tts_end":
-      clearTimeout(state.completionTimer);
+    case "voice_completed":
+      voiceController.cancelTimer("voice-completion-watchdog");
       finishAudio(event);
+      break;
+    case "voice_skipped":
+      voiceController.cancelTimer("voice-completion-watchdog");
+      finishTurn();
       break;
     case "busy": setBusy(true, event.message || "يوجد طلب قيد التنفيذ…"); break;
     case "message_persisted": {
@@ -101,6 +120,7 @@ export function handleEvent(event) {
       closeRealtime();
       state.localSessionId = null;
       state.currentStayId = event.new_stay_id || null;
+      state.backendVoiceRequestId = null;
       state.conversationActive = false;
       restartSocket();
       break;

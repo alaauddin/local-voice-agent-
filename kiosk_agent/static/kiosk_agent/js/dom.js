@@ -6,7 +6,7 @@ const el = {
   chaletName: $("#chaletName"), personaIntro: $("#personaIntro"), mobilePersona: $("#mobilePersona"),
   connectionPill: $("#connectionPill"), connectionText: $("#connectionText"), mobileStatus: $("#mobileStatus"),
   form: $("#chatForm"), input: $("#messageInput"), send: $("#sendButton"), activity: $("#activity"),
-  activityText: $("#activityText"), mic: $("#micButton"), voiceStatus: $("#voiceStatus"),
+  activityText: $("#activityText"), speakPrompt: $("#speakPrompt"), mic: $("#micButton"), voiceStatus: $("#voiceStatus"),
   interim: $("#interimTranscript"), avatar: $("#avatarStage"), reset: $("#resetButton"),
   resetDialog: $("#resetDialog"), cancelReset: $("#cancelReset"), confirmReset: $("#confirmReset"),
   settingsButton: $("#voiceSettingsButton"), settingsDialog: $("#voiceSettingsDialog"),

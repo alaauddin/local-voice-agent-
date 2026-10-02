@@ -13,6 +13,7 @@ from .permissions import KIOSK_COOKIE_NAME, valid_kiosk_cookie
 from .serializers import ChatRequestSerializer
 from .services import AgentBusyError, enqueue_message
 from .tasks import welcome_tts_task
+from .voice.events import voice_fallback
 
 
 class KioskConsumer(AsyncJsonWebsocketConsumer):
@@ -45,12 +46,10 @@ class KioskConsumer(AsyncJsonWebsocketConsumer):
                     stay_id, request_id
                 )
             except Exception:
-                await self.send_json({
-                    "event": "tts_fallback",
-                    "request_id": request_id,
-                    "nonce": request_id,
-                    "text": "أهلاً وسهلاً، أنا معك. تفضل.",
-                })
+                await voice_fallback(
+                    stay_id, request_id, nonce=request_id,
+                    text="أهلاً وسهلاً، أنا معك. تفضل.", reason="welcome_enqueue_failed",
+                )
             return
         if content.get("type") != "chat.message":
             await self.send_json({"event": "error", "message": "Unsupported event type."})

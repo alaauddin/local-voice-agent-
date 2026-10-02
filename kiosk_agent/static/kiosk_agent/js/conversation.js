@@ -4,41 +4,46 @@ import { el } from "./dom.js";
 import { state } from "./state.js";
 import { wakeWord, realtimeEnabled } from "./config.js";
 import { setAvatar, setBusy, updateControls, scheduleAutoRealtime, cancelAutoStart } from "./ui.js";
-import { closeRealtime } from "./realtime.js";
-import { stopRecognition, startRecognition, scheduleWakeListener, speakBrowser } from "./voice.js";
+import { voiceController, VoicePhase } from "./voice-controller.js";
 
 export function finishTurn() {
-  clearTimeout(state.completionTimer);
+  voiceController.cancelTimer("voice-completion-watchdog");
   setBusy(false);
   setAvatar("idle");
   if (state.conversationActive && realtimeEnabled) {
+    voiceController.transition(VoicePhase.LISTENING);
     el.voiceStatus.textContent = "تفضل… أنا أستمع";
     touchConversationTimeout();
   } else if (state.conversationActive) {
+    voiceController.transition(VoicePhase.LISTENING);
     el.voiceStatus.textContent = "تفضل… أنا أستمع";
     touchConversationTimeout();
-    window.setTimeout(() => startRecognition("command"), 450);
+    voiceController.schedule("recognition-restart", () => {
+      voiceController.call("startRecognition", "command");
+    }, 450);
   } else {
+    voiceController.transition(VoicePhase.IDLE);
     el.voiceStatus.textContent = state.wakeArmed
       ? `قل «${wakeWord}» لبدء المحادثة`
       : `اضغط على الميكروفون للسماح بالاستماع`;
-    if (state.wakeArmed) scheduleWakeListener(500);
+    if (state.wakeArmed) voiceController.call("scheduleWakeListener", 500);
   }
 }
 
 export function touchConversationTimeout() {
-  clearTimeout(state.inactivityTimer);
+  voiceController.cancelTimer("conversation-timeout");
   if (!state.conversationActive) return;
   if (realtimeEnabled && state.micAutoStartEnabled) return;
-  state.inactivityTimer = window.setTimeout(() => endConversation(false), 120000);
+  voiceController.schedule("conversation-timeout", () => endConversation(false), 120000);
 }
 
 export function endConversation(sayGoodbye = true) {
-  clearTimeout(state.inactivityTimer);
+  voiceController.cancelTimer("conversation-timeout");
   state.conversationActive = false;
   state.pendingCommand = false;
-  if (realtimeEnabled) closeRealtime();
-  stopRecognition();
+  if (realtimeEnabled) voiceController.call("closeRealtime");
+  else voiceController.invalidateSession({ reason: "conversation_ended" });
+  voiceController.call("stopRecognition");
   el.interim.textContent = "";
   setAvatar("idle");
   el.voiceStatus.textContent = `قل «${wakeWord}» لبدء محادثة جديدة`;
@@ -48,8 +53,8 @@ export function endConversation(sayGoodbye = true) {
     scheduleAutoRealtime(900);
     return;
   }
-  const resumeWake = () => scheduleWakeListener(350);
-  if (sayGoodbye) speakBrowser("في أمان الله، أنا هنا متى احتجتني", resumeWake);
+  const resumeWake = () => voiceController.call("scheduleWakeListener", 350);
+  if (sayGoodbye) voiceController.call("speakBrowser", "في أمان الله، أنا هنا متى احتجتني", resumeWake);
   else resumeWake();
 }
 

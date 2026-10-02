@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#72c7c0">
+  <meta name="theme-color" content="#0b5954">
   <meta name="voice-wake-word" content="{{ voice_wake_word }}">
   <meta name="voice-source" content="{{ voice_source }}">
   <meta name="voice-activation-mode" content="{{ voice_activation_mode }}">
@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=physical-remotes-2">
+  <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=dashboard-reference-2">
 </head>
 <body>
   <main class="kiosk-shell">
@@ -75,6 +75,13 @@
               <span class="mic-ring ring-two"></span>
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
             </button>
+            <div class="speak-prompt" id="speakPrompt" role="status" aria-live="polite" hidden>
+              <div class="voice-wave" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <strong>تحدث الآن</strong>
+              <small>أنا أسمعك، اطلب ما تحتاجه</small>
+            </div>
             <p class="voice-status" id="voiceStatus">قل «{{ voice_wake_word }}» لبدء المحادثة</p>
             <p class="interim-transcript" id="interimTranscript" dir="auto"></p>
             <h2>مرحباً بك في منتجع الغروب</h2>
@@ -177,6 +184,6 @@
     <div id="remotePopupContent" class="remote-popup-content"></div>
   </dialog>
 
-  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=physical-remotes-2"></script>
+  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=dashboard-reference-2"></script>
 </body>
 </html>

@@ -367,15 +367,16 @@ function buildRemoteCard(remote, expanded = false) {
   const count = document.createElement("span");
   count.className = "remote-kind-badge";
   count.textContent = isAC
-    ? (remote.brand_label || remote.brand || "مكيف")
+    ? (remote.ac_state?.power ? "يعمل الآن" : "متوقف")
     : `${configuredCount} أوامر`;
+  if (isAC) count.classList.add(remote.ac_state?.power ? "is-on" : "is-off");
   headingActions.appendChild(count);
   if (!expanded) {
     const open = document.createElement("button");
     open.type = "button";
     open.className = "remote-open-button";
     open.dataset.openRemote = String(remote.id);
-    open.textContent = "فتح";
+    open.textContent = "•••";
     open.setAttribute("aria-label", `فتح جهاز التحكم ${remote.name}`);
     headingActions.appendChild(open);
   }

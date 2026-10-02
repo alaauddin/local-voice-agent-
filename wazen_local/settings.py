@@ -3,6 +3,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from kiosk_agent.voice.config import normalize_voice_source
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
@@ -97,10 +99,11 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 KIOSK_API_KEY = os.getenv("KIOSK_API_KEY", "")
 KIOSK_SESSION_MAX_AGE = int(os.getenv("KIOSK_SESSION_MAX_AGE", "86400"))
-VOICE_SOURCE = os.getenv("VOICE_SOURCE", "realtime")
+VOICE_SOURCE = normalize_voice_source(os.getenv("VOICE_SOURCE"))
 VOICE_MODEL = os.getenv("VOICE_MODEL", "gpt-4o-mini-tts")
 VOICE_NAME = os.getenv("VOICE_NAME", "coral")
 VOICE_SPEED = float(os.getenv("VOICE_SPEED", "1.15"))
+VOICE_TTS_CONCURRENCY = max(1, min(int(os.getenv("VOICE_TTS_CONCURRENCY", "2")), 4))
 VOICE_WAKE_WORD = os.getenv("VOICE_WAKE_WORD", "يا غروب")
 VOICE_ACTIVATION_MODE = os.getenv("VOICE_ACTIVATION_MODE", "wake").lower()
 if VOICE_ACTIVATION_MODE not in {"wake", "always_on", "button"}:

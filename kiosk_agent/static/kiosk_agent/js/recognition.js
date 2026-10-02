@@ -1,31 +1,11 @@
 "use strict";
 
 import { el } from "./dom.js";
-import { state, fallback } from "./state.js";
+import { state } from "./state.js";
 import { wakeWord, realtimeEnabled, voiceSource, activationMode } from "./config.js";
-import { uuid } from "./api.js";
 import { normalizeArabic, normalizedWakeWord, endConversationPhrases } from "./text.js";
-import { setAvatar, setBusy, updateControls, cancelAutoStart } from "./ui.js";
-import { startRealtime } from "./realtime.js";
-import { endConversation, touchConversationTimeout } from "./conversation.js";
-import { submitMessage } from "./actions.js";
-
-export function speakBrowser(text, done = () => {}, force = false) {
-  if ((!force && !fallback.enabled) || !window.speechSynthesis || !text.trim()) { done(); return; }
-  const utterance = new SpeechSynthesisUtterance(text.replace(/[*_#`\[\]]/g, ""));
-  utterance.rate = fallback.rate;
-  utterance.lang = /[\u0600-\u06ff]/.test(text) ? "ar-SA" : "en-US";
-  const voice = fallback.voices.find((item) => item.voiceURI === fallback.voiceURI);
-  if (voice) utterance.voice = voice;
-  utterance.onstart = () => {
-    setAvatar("speaking");
-    el.voiceStatus.textContent = `${state.persona} يتحدث الآن…`;
-  };
-  utterance.onend = done;
-  utterance.onerror = done;
-  window._activeKioskUtterance = utterance;
-  window.speechSynthesis.speak(utterance);
-}
+import { setAvatar, updateControls, cancelAutoStart } from "./ui.js";
+import { voiceController, VoicePhase } from "./voice-controller.js";
 
 export function configureRecognition() {
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -39,6 +19,7 @@ export function configureRecognition() {
   state.recognition.lang = "ar-SA";
   state.recognition.onstart = () => {
     state.recognizing = true;
+    voiceController.transition(VoicePhase.LISTENING);
     if (state.recognitionMode === "wake") {
       setAvatar("idle");
       el.voiceStatus.textContent = `جاهز — قل «${wakeWord}»`;
@@ -72,30 +53,20 @@ export function recognitionResult(event) {
   ) {
     const exactIndex = finalText.indexOf(wakeWord);
     const remainder = exactIndex >= 0 ? finalText.slice(exactIndex + wakeWord.length).trim() : "";
-    state.pendingCommand = false;
+    state.pendingCommand = !remainder && !realtimeEnabled;
     state.finalHandled = Boolean(remainder);
     state.conversationActive = true;
-    touchConversationTimeout();
+    if (!realtimeEnabled) voiceController.beginSession({ source: voiceSource });
+    voiceController.transition(VoicePhase.LISTENING);
+    voiceController.call("touchConversationTimeout");
     stopRecognition();
     if (realtimeEnabled) {
       el.interim.textContent = "";
-      startRealtime(remainder);
-    } else if (remainder) submitMessage(remainder, true);
+      voiceController.call("startRealtime", remainder);
+    } else if (remainder) voiceController.call("submitMessage", remainder, true);
     else {
       el.interim.textContent = "";
-      el.voiceStatus.textContent = `${state.persona} يرحّب بك…`;
-      if (voiceSource === "backend" && state.socket?.readyState === WebSocket.OPEN) {
-        setBusy(true, "يحضّر الترحيب الصوتي…");
-        state.socket.send(JSON.stringify({ type: "voice.welcome", request_id: uuid() }));
-      } else {
-        setAvatar("speaking");
-        speakBrowser("أهلاً وسهلاً، أنا معك. تفضل.", () => {
-          if (!state.conversationActive || state.busy) return;
-          setAvatar("idle");
-          el.voiceStatus.textContent = "تفضل… أنا أستمع";
-          startRecognition("command");
-        }, true);
-      }
+      el.voiceStatus.textContent = "تفضل… أنا أستمع";
     }
     return;
   }
@@ -104,12 +75,12 @@ export function recognitionResult(event) {
     if (endConversationPhrases.some((phrase) => normalizedFinal.includes(phrase))) {
       state.finalHandled = true;
       stopRecognition();
-      endConversation(true);
+      voiceController.call("endConversation", true);
       return;
     }
     state.finalHandled = true;
     stopRecognition();
-    submitMessage(finalText, true);
+    voiceController.call("submitMessage", finalText, true);
   }
 }
 
@@ -133,11 +104,11 @@ export function recognitionEnded() {
   updateControls();
   if (state.pendingCommand) {
     state.pendingCommand = false;
-    window.setTimeout(() => startRecognition("command"), 180);
+    voiceController.schedule("recognition-restart", () => startRecognition("command"), 180);
   } else if (endedMode === "wake" && state.wakeArmed && !state.conversationActive && !state.busy) {
     scheduleWakeListener(400);
   } else if (!realtimeEnabled && endedMode === "command" && !state.finalHandled && state.conversationActive && !state.busy) {
-    window.setTimeout(() => startRecognition("command"), 400);
+    voiceController.schedule("recognition-restart", () => startRecognition("command"), 400);
   }
 }
 
@@ -158,7 +129,7 @@ export function stopRecognition() {
 export function scheduleWakeListener(delay = 250) {
   if (realtimeEnabled && (state.realtimeReady || state.rtcPeer)) return;
   if (!state.wakeArmed || state.conversationActive || state.busy || state.recognizing || !state.connected) return;
-  window.setTimeout(() => {
+  voiceController.schedule("wake-listener", () => {
     if (state.wakeArmed && !state.conversationActive && !state.busy && !state.recognizing) startRecognition("wake");
   }, delay);
 }
@@ -167,19 +138,21 @@ export function toggleWakeWord() {
   if (state.conversationActive) {
     state.micAutoStartEnabled = false;
     cancelAutoStart();
-    endConversation(false);
+    voiceController.call("endConversation", false);
     el.voiceStatus.textContent = "الميكروفون متوقف — اضغط للتفعيل";
   } else if (realtimeEnabled) {
     state.micAutoStartEnabled = activationMode === "always_on";
     state.wakeArmed = activationMode === "wake";
     cancelAutoStart();
     stopRecognition();
-    startRealtime();
+    voiceController.call("startRealtime");
   } else if (state.wakeArmed && state.recognizing) {
     state.conversationActive = true;
     state.pendingCommand = true;
+    voiceController.beginSession({ source: voiceSource });
+    voiceController.transition(VoicePhase.LISTENING);
     stopRecognition();
-    touchConversationTimeout();
+    voiceController.call("touchConversationTimeout");
     el.voiceStatus.textContent = "تفضل… أنا أستمع";
   } else {
     state.wakeArmed = true;

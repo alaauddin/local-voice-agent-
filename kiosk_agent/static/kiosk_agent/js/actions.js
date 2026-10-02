@@ -8,8 +8,10 @@ import {
   createMessage, setBusy, setMessagesOpen, updateControls, cancelAutoStart,
 } from "./ui.js";
 import { startRealtime, sendRealtime, persistRealtimeMessage, closeRealtime } from "./realtime.js";
-import { stopRecognition, speakBrowser } from "./voice.js";
+import { stopRecognition } from "./recognition.js";
+import { speakBrowser } from "./speech-output.js";
 import { stopAudio } from "./tts.js";
+import { getBrowserVoices } from "./browser-speaker.js";
 import { touchConversationTimeout, finishTurn } from "./conversation.js";
 import { restartSocket } from "./socket.js";
 
@@ -53,7 +55,7 @@ export function resizeInput() {
 
 export function populateVoices() {
   if (!window.speechSynthesis) return;
-  fallback.voices = window.speechSynthesis.getVoices();
+  fallback.voices = getBrowserVoices();
   el.browserVoice.replaceChildren();
   [...fallback.voices]
     .sort((a, b) => Number(b.lang.startsWith("ar")) - Number(a.lang.startsWith("ar")))

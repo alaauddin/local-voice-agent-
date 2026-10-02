@@ -33,6 +33,7 @@ AC_NULL_FIELDS = {
 }
 
 
+@override_settings(REMOTE_BUTTON_COOLDOWN_SECONDS=0)
 class AgentToolTests(TestCase):
     def setUp(self):
         self.config = ChaletConfig.load()

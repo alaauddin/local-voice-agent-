@@ -11,6 +11,7 @@ from .core.agent_engine import publish, run_agent
 from .core.voice import generate_and_publish_tts
 from .integrations.saas import forward_request_to_saas
 from .models import ChaletConfig, KioskAuditLog, KioskMessage, StaffRequest
+from .voice.events import voice_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +55,9 @@ def welcome_tts_task(stay_id: str, request_id: str) -> None:
             text=greeting, stay_id=stay_id, request_id=request_id
         )
     except Exception:
-        async_to_sync(publish)(
-            stay_id, "tts_fallback", request_id,
-            text="أهلاً وسهلاً، أنا معك. تفضل.", nonce=request_id,
+        async_to_sync(voice_fallback)(
+            stay_id, request_id, nonce=request_id,
+            text="أهلاً وسهلاً، أنا معك. تفضل.", reason="welcome_task_failed",
         )
         raise
     finally:

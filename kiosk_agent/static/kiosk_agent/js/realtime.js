@@ -2,18 +2,14 @@
 
 import { el } from "./dom.js";
 import { state } from "./state.js";
-import { apiKey, realtimeEnabled, activationMode } from "./config.js";
+import { apiKey, realtimeEnabled } from "./config.js";
 import { headers, uuid, postJson } from "./api.js";
-import {
-  playback, ensureAssistantGain, resumeOutputContext, getPreferredMicId,
-  ASSISTANT_OUTPUT_GAIN, getOutputGain,
-} from "./audio-core.js";
+import { playback, getPreferredMicId } from "./audio-core.js";
 import {
   setAvatar, setBusy, updateControls, scrollBottom, createMessage,
-  cancelAutoStart, scheduleAutoRealtime,
+  cancelAutoStart, scheduleAutoRealtime, setSpeakPrompt,
 } from "./ui.js";
-import { stopRecognition, scheduleWakeListener, speakBrowser } from "./voice.js";
-import { endConversation, touchConversationTimeout } from "./conversation.js";
+import { voiceController, VoicePhase } from "./voice-controller.js";
 
 export function sendRealtime(event) {
   if (!state.rtcChannel || state.rtcChannel.readyState !== "open") return false;
@@ -92,6 +88,8 @@ export async function handleRealtimeEvent(event) {
       console.debug(`[Realtime] ${event.type}`);
       return;
     case "input_audio_buffer.speech_started":
+      voiceController.transition(VoicePhase.LISTENING);
+      setSpeakPrompt(false);
       console.debug("[Realtime] speech_started", { at: Math.round(performance.now()) });
       // Cut the assistant audio locally before its tail can leak back into the
       // microphone. Server VAD still handles cancelling the active response.
@@ -102,12 +100,13 @@ export async function handleRealtimeEvent(event) {
       state.toolIterations = 0;
       state.assistantTranscript = "";
       state.assistantTarget = null;
-      touchConversationTimeout();
+      voiceController.call("touchConversationTimeout");
       setBusy(false);
       setAvatar("idle");
       el.voiceStatus.textContent = "أنا أسمعك…";
       return;
     case "input_audio_buffer.speech_stopped":
+      voiceController.transition(VoicePhase.PROCESSING);
       console.debug("[Realtime] speech_stopped", { at: Math.round(performance.now()), turnStoppedAt: Math.round(performance.now()) });
       state.turnStoppedAt = performance.now();
       setBusy(true, "فهمت عليك…");
@@ -126,12 +125,14 @@ export async function handleRealtimeEvent(event) {
       return;
     }
     case "response.created":
+      voiceController.transition(VoicePhase.PROCESSING);
       console.debug("[Realtime] response created", { id: event.response?.id || event.response_id || "", at: Math.round(performance.now()) });
       state.responseStartedAt = performance.now();
       state.responseComplete = false;
       setBusy(true, "غروب معك…");
       return;
     case "output_audio_buffer.started":
+      voiceController.transition(VoicePhase.SPEAKING);
       console.debug("[Realtime] output_audio_buffer.started");
       noteFirstAudioLatency();
       playback.muted = false;
@@ -145,6 +146,7 @@ export async function handleRealtimeEvent(event) {
       state.outputAudioActive = false;
       if (state.responseComplete) {
         setAvatar("idle");
+        setSpeakPrompt(true);
         el.voiceStatus.textContent = "تفضل… أنا أستمع";
       }
       return;
@@ -174,6 +176,7 @@ export async function handleRealtimeEvent(event) {
       state.assistantEventId = event.item_id || event.response_id || uuid();
       return;
     case "response.done": {
+      voiceController.transition(VoicePhase.LISTENING);
       state.responseComplete = true;
       const calls = (event.response?.output || []).filter((item) => item.type === "function_call");
       if (calls.length) {
@@ -195,12 +198,16 @@ export async function handleRealtimeEvent(event) {
       state.assistantTarget = null;
       state.assistantEventId = "";
       setBusy(false);
-      if (!state.outputAudioActive) setAvatar("idle");
+      if (!state.outputAudioActive) {
+        setAvatar("idle");
+        setSpeakPrompt(true);
+      }
       el.voiceStatus.textContent = "تفضل… أنا أستمع";
-      touchConversationTimeout();
+      voiceController.call("touchConversationTimeout");
       return;
     }
     case "error":
+      voiceController.transition(VoicePhase.RECOVERING);
       console.error("OpenAI Realtime error", event.error || event);
       setBusy(false);
       el.voiceStatus.textContent = "تعذر إكمال الرد، تفضل بالمحاولة مرة أخرى";
@@ -211,19 +218,27 @@ export async function handleRealtimeEvent(event) {
 }
 
 export function closeRealtime() {
+  voiceController.invalidateSession({ reason: "realtime_closed" });
+  if (state.realtimeAbortController) state.realtimeAbortController.abort();
+  state.realtimeAbortController = null;
+  state.connectionPromise = null;
   const closingSessionId = state.localSessionId;
   const closingStayId = state.currentStayId;
   state.realtimeReady = false;
-  if (state.rtcChannel) state.rtcChannel.close();
-  if (state.rtcPeer) state.rtcPeer.close();
-  if (state.rtcStream) state.rtcStream.getTracks().forEach((track) => track.stop());
+  setSpeakPrompt(false);
+  const channel = state.rtcChannel;
+  const peer = state.rtcPeer;
+  const stream = state.rtcStream;
+  state.rtcChannel = null;
+  state.rtcPeer = null;
+  state.rtcStream = null;
+  if (channel) channel.close();
+  if (peer) peer.close();
+  if (stream) stream.getTracks().forEach((track) => track.stop());
   if (playback.srcObject) {
     playback.pause();
     playback.srcObject = null;
   }
-  state.rtcChannel = null;
-  state.rtcPeer = null;
-  state.rtcStream = null;
   state.localSessionId = null;
   state.currentRequestId = null;
   state.assistantTranscript = "";
@@ -246,17 +261,48 @@ export function closeRealtime() {
 export function startRealtime(initialText = "") {
   if (state.connectionPromise) return state.connectionPromise;
   if (!realtimeEnabled || state.realtimeReady || state.rtcPeer) return Promise.resolve();
-  state.connectionPromise = openRealtime(initialText).finally(() => {
-    state.connectionPromise = null;
+  const generation = voiceController.beginSession({ source: "realtime" });
+  state.realtimeGeneration = generation;
+  const promise = openRealtime(initialText, generation).finally(() => {
+    if (state.connectionPromise === promise) state.connectionPromise = null;
   });
-  return state.connectionPromise;
+  state.connectionPromise = promise;
+  return promise;
 }
 
-export async function openRealtime(initialText = "") {
+function recoverRealtime(peer, reason) {
+  if (state.rtcPeer !== peer) return;
+  if (!state.conversationActive || !state.connected) {
+    voiceController.call("endConversation", false);
+    return;
+  }
+  const autoStart = state.micAutoStartEnabled;
+  console.warn(`Realtime connection ${reason}; recovering`);
+  closeRealtime();
+  state.conversationActive = false;
+  setBusy(false);
+  updateControls();
+  el.voiceStatus.textContent = "انقطع الاتصال الصوتي — نعيد المحاولة…";
+  if (autoStart) {
+    scheduleAutoRealtime(1200);
+  } else {
+    voiceController.schedule("realtime-reconnect", () => {
+      if (state.connected && !state.rtcPeer) voiceController.call("startRealtime");
+    }, 1200);
+  }
+}
+
+export async function openRealtime(initialText = "", generation = state.realtimeGeneration) {
   if (!realtimeEnabled || state.realtimeReady || state.rtcPeer) return;
-  stopRecognition();
+  let stream = null;
+  const abortController = new AbortController();
+  state.realtimeAbortController = abortController;
+  voiceController.schedule("realtime-connect-timeout", () => {
+    abortController.abort(new DOMException("Realtime connection timed out", "TimeoutError"));
+  }, 30000, generation);
+  voiceController.call("stopRecognition");
   state.conversationActive = true;
-  touchConversationTimeout();
+  voiceController.call("touchConversationTimeout");
   setBusy(true, "أتصل بغروب…");
   const connectionStartedAt = performance.now();
   try {
@@ -275,15 +321,16 @@ export async function openRealtime(initialText = "") {
       if (withDevice && preferredId) c.deviceId = { exact: preferredId };
       return c;
     };
-    let stream;
     let audioConstraints = buildConstraints(true);
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      voiceController.assertCurrent(generation);
     } catch (error) {
       if (preferredId && ["NotFoundError", "OverconstrainedError", "NotReadableError"].includes(error.name)) {
         console.warn(`[Mic] preferred device ${preferredId.slice(0,8)} failed (${error.name}), retrying without deviceId`);
         audioConstraints = buildConstraints(false);
         stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        voiceController.assertCurrent(generation);
       } else {
         throw error;
       }
@@ -305,14 +352,9 @@ export async function openRealtime(initialText = "") {
     }
     stream.getAudioTracks().forEach((track) => {
       track.addEventListener("ended", () => {
-        if (!state.micAutoStartEnabled) return;
         if (state.rtcStream !== stream) return;
         console.warn("Microphone track ended unexpectedly, recovering");
-        closeRealtime();
-        state.conversationActive = false;
-        updateControls();
-        el.voiceStatus.textContent = "انقطع الميكروفون — نعيد المحاولة…";
-        scheduleAutoRealtime(800);
+        recoverRealtime(state.rtcPeer, "microphone ended");
       });
     });
     const pc = new RTCPeerConnection();
@@ -321,50 +363,61 @@ export async function openRealtime(initialText = "") {
     state.rtcChannel = dc;
     state.rtcStream = stream;
     stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream));
-    pc.ontrack = ({ streams }) => {
-      ensureAssistantGain();
-      resumeOutputContext();
-      playback.srcObject = streams[0];
+    pc.ontrack = ({ track, streams }) => {
+      if (!voiceController.isCurrent(generation)) return;
+      const remoteStream = streams[0] || new MediaStream([track]);
+      playback.srcObject = remoteStream;
       playback.muted = false;
       playback.volume = 1;
-      const gain = getOutputGain();
-        if (gain) gain.gain.value = ASSISTANT_OUTPUT_GAIN;
-      playback.play().catch((error) =>
-        console.error("Realtime audio playback failed", error)
-      );
+      playback.play().then(() => {
+        state.audioUnlocked = true;
+      }).catch((error) => {
+        console.error("Realtime audio playback failed", error);
+        el.voiceStatus.textContent = "تعذر تشغيل الصوت — المس الشاشة ثم حاول مرة أخرى";
+      });
     };
     dc.addEventListener("message", ({ data }) => {
+      if (!voiceController.isCurrent(generation)) return;
       try { handleRealtimeEvent(JSON.parse(data)).catch((error) => console.error(error)); }
       catch (error) { console.error("Invalid Realtime event", error); }
     });
     const channelReady = new Promise((resolve, reject) => {
       dc.addEventListener("open", resolve, { once: true });
       dc.addEventListener("error", reject, { once: true });
+      dc.addEventListener("close", () => {
+        reject(new DOMException("Realtime data channel closed", "NetworkError"));
+      }, { once: true });
     });
     pc.addEventListener("connectionstatechange", () => {
-      if (!["failed", "closed"].includes(pc.connectionState)) return;
-      if (state.rtcPeer !== pc) return;
-      if (state.micAutoStartEnabled && realtimeEnabled) {
-        console.warn(`Realtime connection ${pc.connectionState}, recovering with auto-mic`);
-        const wasActive = state.conversationActive;
-        closeRealtime();
-        state.conversationActive = false;
-        setBusy(false);
-        updateControls();
-        el.voiceStatus.textContent = "انقطع الاتصال الصوتي — نعيد المحاولة…";
-        if (wasActive) scheduleAutoRealtime(1200);
-        else scheduleAutoRealtime(1200);
-      } else if (state.conversationActive) {
-        endConversation(false);
+      if (pc.connectionState === "connected") {
+        voiceController.cancelTimer("realtime-disconnect");
+        return;
+      }
+      if (pc.connectionState === "disconnected") {
+        voiceController.schedule("realtime-disconnect", () => {
+          if (state.rtcPeer === pc && pc.connectionState === "disconnected") {
+            recoverRealtime(pc, "disconnected");
+          }
+        }, 5000, generation);
+        return;
+      }
+      if (["failed", "closed"].includes(pc.connectionState)) {
+        recoverRealtime(pc, pc.connectionState);
       }
     });
+    dc.addEventListener("close", () => {
+      if (state.realtimeReady) recoverRealtime(pc, "data channel closed");
+    });
     const offer = await pc.createOffer();
+    voiceController.assertCurrent(generation);
     await pc.setLocalDescription(offer);
+    voiceController.assertCurrent(generation);
     const realtimeHeaders = { "Content-Type": "application/sdp" };
     if (apiKey) realtimeHeaders["X-Kiosk-Key"] = apiKey;
     const response = await fetch("/api/v1/kiosk/realtime/session/", {
-      method: "POST", headers: realtimeHeaders, body: offer.sdp,
+      method: "POST", headers: realtimeHeaders, body: offer.sdp, signal: abortController.signal,
     });
+    voiceController.assertCurrent(generation);
     if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
     state.localSessionId = response.headers.get("X-Local-Session-ID");
     state.currentStayId = response.headers.get("X-Stay-ID") || state.currentStayId;
@@ -373,11 +426,22 @@ export async function openRealtime(initialText = "") {
     }
     const answerSdp = await response.text();
     await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-    await channelReady;
+    voiceController.assertCurrent(generation);
+    const channelTimeout = new Promise((_, reject) => {
+      voiceController.schedule("realtime-channel-timeout", () => {
+        reject(new DOMException("Realtime data channel timed out", "TimeoutError"));
+      }, 15000, generation);
+    });
+    await Promise.race([channelReady, channelTimeout]);
+    voiceController.cancelTimer("realtime-channel-timeout");
+    voiceController.assertCurrent(generation);
     console.debug(
       `Realtime connection latency: ${Math.round(performance.now() - connectionStartedAt)}ms`,
     );
     state.realtimeReady = true;
+    state.realtimeAbortController = null;
+    voiceController.cancelTimer("realtime-connect-timeout");
+    voiceController.transition(VoicePhase.LISTENING);
     state.realtimeRetryAttempts = 0;
     state.currentRequestId = uuid();
     state.toolIterations = 0;
@@ -390,19 +454,17 @@ export async function openRealtime(initialText = "") {
         item: { type: "message", role: "user", content: [{ type: "input_text", text: clean }] },
       });
       sendRealtime({ type: "response.create" });
-    } else {
-      sendRealtime({
-        type: "response.create",
-        response: {
-          instructions: "رحّب بالضيف الآن بجملة عربية قصيرة ودافئة جداً، ثم قل له: تفضل، أنا معك.",
-        },
-      });
     }
     cancelAutoStart();
     setBusy(false);
+    setSpeakPrompt(!initialText.trim());
     updateControls();
-    el.voiceStatus.textContent = "تفضل… أنا أستمع";
+    el.voiceStatus.textContent = "جاهز للاستماع — تحدث الآن";
   } catch (error) {
+    if (!voiceController.isCurrent(generation)) {
+      if (stream) stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
     const errName = error && error.name ? error.name : "UnknownError";
     console.error(`Unable to start Realtime [${errName}]`, error);
     closeRealtime();
@@ -430,8 +492,8 @@ export async function openRealtime(initialText = "") {
         }
       }
     } else {
-      speakBrowser("تعذر تشغيل المحادثة المباشرة الآن. حاول مرة أخرى.", () => {
-        scheduleWakeListener(500);
+      voiceController.call("speakBrowser", "تعذر تشغيل المحادثة المباشرة الآن. حاول مرة أخرى.", () => {
+        voiceController.call("scheduleWakeListener", 500);
       }, true);
     }
   }

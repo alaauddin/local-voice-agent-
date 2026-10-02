@@ -3,6 +3,7 @@
 import { $, el } from "./js/dom.js";
 import { state, fallback } from "./js/state.js";
 import { realtimeEnabled } from "./js/config.js";
+import { voiceController } from "./js/voice-controller.js";
 import {
   populatePreferredMic, unlockAudio, preferredMicKey,
 } from "./js/audio-core.js";
@@ -12,48 +13,28 @@ import {
 import {
   setAvatar, preloadAvatarVideos, setMessagesOpen, updateControls, setBusy,
   cancelAutoStart, scheduleAutoRealtime, setConnection, loadMemory,
-  avatarObjectUrls,
 } from "./js/ui.js";
 import { connect } from "./js/socket.js";
-import { closeRealtime } from "./js/realtime.js";
-import { endConversation } from "./js/conversation.js";
+import { closeRealtime, startRealtime } from "./js/realtime.js";
+import { endConversation, touchConversationTimeout } from "./js/conversation.js";
 import {
-  speakBrowser, configureRecognition, toggleWakeWord,
+  configureRecognition, toggleWakeWord,
   stopRecognition, startRecognition, scheduleWakeListener,
-} from "./js/voice.js";
+} from "./js/recognition.js";
+import { speakBrowser } from "./js/speech-output.js";
 import { submitMessage, resizeInput, populateVoices, resetStay } from "./js/actions.js";
+
+voiceController.configure({
+  closeRealtime, endConversation, scheduleWakeListener, speakBrowser, startRealtime,
+  startRecognition, stopRecognition, submitMessage, touchConversationTimeout,
+});
 
 bindRemotesUi();
 
-let welcomeWaitStartedAt = 0;
-window.setInterval(() => {
-  const waitingForWelcome = state.busy
-    && el.voiceStatus.textContent === "يحضّر الترحيب الصوتي…";
-  if (!waitingForWelcome) {
-    welcomeWaitStartedAt = 0;
-    return;
-  }
-  if (!welcomeWaitStartedAt) {
-    welcomeWaitStartedAt = Date.now();
-    return;
-  }
-  if (Date.now() - welcomeWaitStartedAt < 8000) return;
-  welcomeWaitStartedAt = 0;
-  clearTimeout(state.completionTimer);
-  setBusy(false);
-  setAvatar("speaking");
-  el.voiceStatus.textContent = `${state.persona} يرحّب بك…`;
-  speakBrowser("أهلاً وسهلاً، أنا معك. تفضل.", () => {
-    if (!state.conversationActive || state.busy) return;
-    setAvatar("idle");
-    el.voiceStatus.textContent = "تفضل… أنا أستمع";
-    startRecognition("command");
-  }, true);
-}, 500);
 
 el.form.addEventListener("submit", (event) => { event.preventDefault(); submitMessage(el.input.value); });
-document.addEventListener("pointerdown", unlockAudio, { once: true, passive: true });
-document.addEventListener("keydown", unlockAudio, { once: true, passive: true });
+document.addEventListener("pointerdown", unlockAudio, { passive: true });
+document.addEventListener("keydown", unlockAudio, { passive: true });
 el.input.addEventListener("input", resizeInput, {passive:true});
 el.input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitMessage(el.input.value); }
@@ -129,7 +110,7 @@ document.addEventListener("visibilitychange", () => {
     scheduleAutoRealtime(300);
     return;
   }
-  if (state.conversationActive && !realtimeEnabled) window.setTimeout(() => startRecognition("command"), 250);
+  if (state.conversationActive && !realtimeEnabled) voiceController.schedule("visibility-recognition", () => startRecognition("command"), 250);
   else scheduleWakeListener(250);
 });
 window.addEventListener("online", () => setConnection("online", "عاد الاتصال — جاهز لخدمتك"));
@@ -138,7 +119,6 @@ window.addEventListener("beforeunload", () => {
   cancelAutoStart();
   stopRecognition();
   closeRealtime();
-  avatarObjectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
 });
 if (window.speechSynthesis) {
   populateVoices();

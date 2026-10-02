@@ -60,7 +60,8 @@ def validate_ir_command(ir_id, frequency, raw) -> dict:
 
 
 def _cooldown_seconds() -> float:
-    return float(getattr(settings, "REMOTE_BUTTON_COOLDOWN_SECONDS", 1.5) or 1.5)
+    configured = getattr(settings, "REMOTE_BUTTON_COOLDOWN_SECONDS", 1.5)
+    return 1.5 if configured is None else float(configured)
 
 
 def _check_cooldown(button_id: int) -> None:

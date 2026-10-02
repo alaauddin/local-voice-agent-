@@ -46,12 +46,6 @@ export function preloadAvatarVideos() {
   });
 }
 
-export function setSpeakPrompt(visible) {
-  if (!el.speakPrompt) return;
-  el.speakPrompt.hidden = !visible;
-  el.welcome.classList.toggle("ready-to-listen", visible);
-}
-
 export function updateControls() {
   el.send.disabled = !state.connected || (!realtimeEnabled && state.busy) || !el.input.value.trim();
   el.mic.disabled = !state.connected
@@ -106,7 +100,6 @@ export function setBusy(busy, text = "يجهّز لك الرد…") {
   el.activityText.textContent = text;
   el.input.disabled = busy && !realtimeEnabled;
   if (busy) {
-    setSpeakPrompt(false);
     voiceController.call("stopRecognition");
     setAvatar("thinking");
     el.voiceStatus.textContent = text;

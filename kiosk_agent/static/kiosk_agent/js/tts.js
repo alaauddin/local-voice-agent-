@@ -4,8 +4,9 @@ import { el } from "./dom.js";
 import { state } from "./state.js";
 import { playback } from "./audio-core.js";
 import { setAvatar } from "./ui.js";
-import { speakBrowser } from "./voice.js";
+import { speakBrowser } from "./speech-output.js";
 import { finishTurn } from "./conversation.js";
+import { voiceController, VoicePhase } from "./voice-controller.js";
 
 export function resetAudio(nonce, total = 0) {
   stopAudio();
@@ -46,6 +47,7 @@ export function playNext() {
   }
   state.audioBuffer.delete(state.nextSeq);
   state.audioPlaying = true;
+  voiceController.transition(VoicePhase.SPEAKING);
   setAvatar("thinking");
   el.voiceStatus.textContent = "يبدأ تشغيل الرد الصوتي…";
   if (chunk.type === "speech") {

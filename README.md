@@ -21,6 +21,12 @@ Redis. Migrations and static-file collection run automatically before the web pr
 The existing `db.sqlite3` is mounted into the application so chalet configuration and kiosk memory
 survive image rebuilds. Redis data is kept in the `redis_data` Docker volume.
 
+The production image compiles all runtime modules under `kiosk_agent` and `wazen_local` into
+native Cython extensions. Package markers, Django migrations, and `manage.py` remain as small
+Python bootstrap files; tests are omitted from the image.
+Compilation can reduce Python interpreter overhead, but substantial CPU improvements still require
+profiling hot paths and adding C-level types to the functions that dominate execution time.
+
 Useful commands:
 
 ```bash
@@ -81,6 +87,8 @@ Socket output events are `connected`, `accepted`, `status`, `token`, `tool_statu
 chain-of-thought is deliberately never exposed.
 
 ## Wake-word voice mode
+
+`VOICE_SOURCE` accepts exactly `realtime`, `backend`, or `off` (case and surrounding whitespace are normalized). Invalid or empty values stop startup instead of silently selecting mismatched browser and server behavior. `backend` uses browser recognition with server-generated MP3 speech; `realtime` uses WebRTC speech-to-speech; `off` skips response speech. Backend synthesis concurrency defaults to `VOICE_TTS_CONCURRENCY=2` and is capped at four.
 
 The kiosk wake phrase defaults to **يا غروب**. `VOICE_ACTIVATION_MODE=wake` keeps the lightweight
 wake listener active while the page is visible, then opens one WebRTC session for the conversation.
