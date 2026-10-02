@@ -16,8 +16,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=dashboard-reference-2">
+  <link rel="stylesheet" href="{% static 'kiosk_agent/dashboard.css' %}?v=dashboard-layout-3">
 </head>
-<body>
+<body class="resort-dashboard">
   <main class="kiosk-shell">
     <section class="chat-panel" aria-label="محادثة الكونسيرج">
       <header class="mobile-header app-header">
@@ -29,6 +30,11 @@
             <span id="mobilePersona" class="sr-only">غروب في خدمتك</span>
           </div>
         </div>
+        <nav class="dashboard-header-nav" aria-label="التنقل في الصفحة">
+          <a href="#welcomeCard" class="is-current"><span data-dashboard-icon="device"></span>الصفحة الرئيسية</a>
+          <a href="#remotesPanel"><span data-dashboard-icon="tv"></span>الأجهزة</a>
+          <a href="#suggestions"><span data-dashboard-icon="light"></span>الخدمات</a>
+        </nav>
         <div class="header-status">
           <button class="voice-settings-button" id="voiceSettingsButton" type="button" aria-label="إعدادات الصوت" title="إعدادات الصوت">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
@@ -99,9 +105,17 @@
               <div>
                 <small>التحكم بالأجهزة</small>
                 <strong id="remoteTitle">أجهزة الشاليه</strong>
+                <span class="dashboard-subtitle">تحكم بكل أجهزة الشاليه بسهولة وراحة</span>
               </div>
               <p class="remote-location" id="remoteLocation">مرّر لاستعراض الأجهزة</p>
             </header>
+            <div class="dashboard-toolbar">
+              <div class="dashboard-view-toggle" role="group" aria-label="طريقة عرض الأجهزة">
+                <button type="button" data-remote-view="grid" aria-label="عرض شبكة" aria-pressed="true"><span data-dashboard-icon="mode"></span></button>
+                <button type="button" data-remote-view="list" aria-label="عرض قائمة" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h1M3 12h1M3 18h1"/></svg></button>
+              </div>
+              <nav class="dashboard-room-tabs" id="remoteFilters" aria-label="تصفية الأجهزة حسب الغرفة"></nav>
+            </div>
             <div class="remotes-carousel" id="remotesCarousel" tabindex="0" role="region" aria-label="أجهزة التحكم">
               <div class="remotes-track" id="remotesTrack"></div>
             </div>
@@ -184,6 +198,6 @@
     <div id="remotePopupContent" class="remote-popup-content"></div>
   </dialog>
 
-  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=dashboard-reference-2"></script>
+  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=dashboard-layout-3"></script>
 </body>
 </html>

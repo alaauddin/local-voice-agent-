@@ -1,0 +1,158 @@
+/* /chat/ dashboard: compact cards, independent of the legacy remote skin. */
+.resort-dashboard {
+  --dashboard-ink: #123e45;
+  --dashboard-muted: #7b9094;
+  --dashboard-card: #fcfaf6;
+  --dashboard-line: #eceae3;
+  background: #f4ede2;
+}
+.resort-dashboard .kiosk-shell { width: min(1600px, 100%); box-shadow: none; }
+.resort-dashboard .chat-panel { background: radial-gradient(ellipse at 0 80%, #ede0c9, transparent 45%), #f6f1e8; }
+.resort-dashboard .app-header { min-height: 68px; background: #fcfaf6; border: 0; border-radius: 0 0 20px 20px; }
+.dashboard-header-nav { display: flex; align-items: center; gap: 6px; }
+.dashboard-header-nav a { display: flex; align-items: center; gap: 9px; padding: 12px; border-radius: 10px; color: #425c66; text-decoration: none; font-size: 10px; }
+.dashboard-header-nav svg { display: block; width: 17px; height: 17px; }
+.dashboard-header-nav a.is-current { color: #ca731f; background: #faf0e3; }
+.dashboard-header-nav a:hover { background: #f4efe6; }
+.resort-dashboard .voice-canvas { padding: 20px 28px 28px; background: transparent; align-items: start; overflow-y: auto; }
+.resort-dashboard .voice-stage { width: 100%; max-width: 1500px; padding: 0; margin: 0 auto; }
+.resort-dashboard .voice-stage.has-remotes { display: grid; grid-template-columns: minmax(250px, .3fr) minmax(0, .7fr); gap: 16px; align-items: stretch; }
+.resort-dashboard .remotes-panel {
+  width: 100%; max-width: none; height: auto; min-height: 0; margin: 0; padding: 22px;
+  align-self: start; overflow: hidden; border-radius: 22px;
+  background: radial-gradient(ellipse at 70% -20%, #367d75a6, transparent 60%), linear-gradient(135deg, #164b4b, #0d403c 65%, #103e39);
+  border: 1px solid #ffffff20; box-shadow: 0 20px 35px #243f3525;
+}
+.resort-dashboard .remotes-panel::before { width: 400px; height: 230px; top: -90px; left: 0; background: repeating-conic-gradient(from 30deg at 0 100%, transparent 0deg 9deg, #032e2b24 10deg 15deg, transparent 16deg 25deg); border-radius: 0; filter: none; }
+.resort-dashboard .remotes-header { margin-bottom: 14px; align-items: center; gap: 12px; }
+.resort-dashboard .remotes-header strong { margin: 2px 0; color: #f8fcfa; font-size: 22px; line-height: 1.6; }
+.resort-dashboard .remotes-header small { color: #89bcb6; font-size: 9px; }
+.dashboard-subtitle { display: block; color: #b0cbc6; font-size: 10px; }
+.resort-dashboard .remote-location { margin: 0; padding: 12px 16px; border: 1px solid #ffffff18; border-radius: 17px; background: #ffffff0d; color: #d1e8e3; font-size: 10px; white-space: nowrap; }
+.dashboard-toolbar { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.dashboard-room-tabs { display: flex; max-width: 80%; padding: 3px; overflow-x: auto; border: 1px solid #ffffff17; background: #ffffff0d; border-radius: 16px; scrollbar-width: thin; }
+.dashboard-room-tabs button { flex: 0 0 auto; border: 0; border-radius: 13px; padding: 9px 18px; color: #daece8; background: transparent; font-size: 9px; }
+.dashboard-room-tabs button[aria-pressed="true"] { background: linear-gradient(120deg, #fff0ce, #ffdfa9); color: #264c47; box-shadow: 0 2px 12px #f9cf7940; }
+.dashboard-view-toggle { display: flex; padding: 3px; border: 1px solid #ffffff17; border-radius: 30px; background: #052b2955; }
+.dashboard-view-toggle button { display: grid; place-items: center; width: 33px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: #c5e4df; }
+.dashboard-view-toggle button[aria-pressed="true"] { background: #ffffff20; }
+.dashboard-view-toggle svg { display: block; width: 16px; height: 16px; }
+.resort-dashboard .remotes-carousel { flex: none; padding: 0; max-height: none; overflow: visible; background: none; border: 0; box-shadow: none; }
+.resort-dashboard .remotes-track { display: grid; direction: ltr; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: stretch; grid-auto-rows: auto; gap: 12px; will-change: auto; }
+.resort-dashboard .dashboard-device { grid-column: span 2; min-width: 0; height: auto; padding: 15px; color: var(--dashboard-ink); background: var(--dashboard-card); border: 1px solid #e3e9df; border-radius: 13px; box-shadow: 0 5px 10px #002d2920; transform: none; }
+.resort-dashboard .dashboard-device.device-ac { grid-column: span 3; }
+.dashboard-device-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; direction: rtl; }
+.dashboard-device-icon { flex: 0 0 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #e7eeea; border: 1px solid #dfe8e3; color: #225c60; }
+.dashboard-device-icon svg { width: 24px; height: 24px; }
+.device-light .dashboard-device-icon { color: #ef941c; background: #fff4e2; border-color: #fbe9cd; }
+.dashboard-device-copy { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.dashboard-device-copy strong { font-size: 12px; line-height: 1.6; }
+.dashboard-device-copy small { color: var(--dashboard-muted); font-size: 8px; }
+.dashboard-device-status { display: flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 20px; font-size: 7px; white-space: nowrap; color: #73888d; background: #e9eeeb; }
+.dashboard-device-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.dashboard-device-status.is-on { color: #168e57; background: #e7f2e8; }
+.resort-dashboard .dashboard-device .remote-open-button { flex: 0 0 23px; min-width: 23px; width: 23px; height: 23px; padding: 0; color: #305b60; font: 700 17px/1 Arial, sans-serif; background: #f1f3ee; border: 1px solid #e5e9e2; border-radius: 50%; }
+.dashboard-ac { display: grid; gap: 15px; }
+.dashboard-ac-display { display: grid; grid-template-columns: 1fr 1fr 34px; align-items: center; gap: 10px; min-height: 112px; padding: 10px; border: 1px solid var(--dashboard-line); border-radius: 12px; }
+.dashboard-temperature { text-align: center; }
+.dashboard-temperature-reading { display: flex; align-items: start; justify-content: center; direction: ltr; color: #073943; font-family: Arial, sans-serif; }
+.dashboard-temperature-reading strong { font-size: 48px; line-height: 1.15; letter-spacing: -2px; }
+.dashboard-temperature-reading > span { margin-top: 5px; font-size: 16px; font-weight: 700; }
+.dashboard-temperature > small { font-size: 8px; color: var(--dashboard-muted); white-space: nowrap; }
+.dashboard-temperature-arrows { display: grid; gap: 7px; }
+.dashboard-ac-details { display: grid; gap: 6px; }
+.dashboard-detail { min-height: 43px; display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: linear-gradient(120deg, #eff2ed, #f6f6f1); border-radius: 4px; }
+.dashboard-detail svg { flex: 0 0 22px; width: 22px; height: 22px; color: #25616a; }
+.dashboard-detail.detail-cool svg { color: #24a6d0; }
+.dashboard-detail > div { display: grid; gap: 3px; }
+.dashboard-detail small { font-size: 7px; color: var(--dashboard-muted); }
+.dashboard-detail strong { font-size: 9px; }
+.dashboard-ac-actions { display: flex; gap: 6px; }
+.resort-dashboard .dashboard-control {
+  position: relative; display: flex; flex: 1 1 0; align-items: center; justify-content: center; flex-direction: column;
+  min-width: 0; width: auto; height: auto; min-height: 60px; padding: 8px 3px; gap: 7px; aspect-ratio: auto;
+  color: #245b62; background: #faf9f4; border: 1px solid var(--dashboard-line); border-radius: 11px;
+  box-shadow: none; font-size: 7px; transform: none;
+}
+.resort-dashboard .dashboard-control svg { width: 21px; height: 21px; flex-shrink: 0; }
+.dashboard-control-label { line-height: 1.5; text-align: center; }
+.resort-dashboard .dashboard-control:hover:not(:disabled) { background: #edf4ef; border-color: #95c1b7; box-shadow: none; transform: none; }
+.resort-dashboard .dashboard-control.is-active { background: #e5f3e8; color: #168458; border-color: #cce4d2; }
+.resort-dashboard .dashboard-control:disabled { opacity: .4; cursor: not-allowed; }
+.resort-dashboard .dashboard-control.will-start { color: white; background: linear-gradient(135deg, #20b798, #00a080); border-color: #27b89a; }
+.resort-dashboard .dashboard-control.will-stop { color: white; background: linear-gradient(135deg, #f7b34c, #e99128); border-color: #efac50; }
+.resort-dashboard .dashboard-control.will-start:hover { background: #049e80; }
+.resort-dashboard .dashboard-control.will-stop:hover { background: #e99128; }
+.resort-dashboard .dashboard-temperature-arrows .dashboard-control { width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: 50%; background: #f0f2ed; }
+.dashboard-temperature-arrows .dashboard-control-label { display: none; }
+.dashboard-extra > summary { cursor: pointer; color: #718885; font-size: 8px; }
+.dashboard-extra[open] > summary { margin-bottom: 8px; }
+.dashboard-generic { display: grid; gap: 12px; }
+.dashboard-power-strip { display: flex; border: 1px solid var(--dashboard-line); border-radius: 10px; overflow: hidden; background: #f4f3ee; }
+.resort-dashboard .dashboard-power-strip .dashboard-control { min-height: 40px; border: 0; flex-direction: row; border-radius: 9px; font-size: 9px; }
+.resort-dashboard .dashboard-power-strip .dashboard-control[data-icon="power"],
+.resort-dashboard .dashboard-power-strip .dashboard-control[data-icon="power_speed"] { background: linear-gradient(135deg, #2a7775, #155955); color: white; }
+.resort-dashboard .device-light .dashboard-power-strip .dashboard-control[data-icon="power"] { color: #6b511d; background: #ffc65e; }
+.resort-dashboard .dashboard-power-strip .dashboard-control[data-power-action="off"] { color: #285a61; background: #f6f5ef; }
+.resort-dashboard .dashboard-control.error { color: #983f34; background: #fbe9e2; border-color: #dea393; }
+.resort-dashboard .dashboard-control.success { border-color: #45a785; }
+.dashboard-generic-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.resort-dashboard .dashboard-generic-actions .dashboard-control { min-height: 48px; font-size: 7px; }
+.dashboard-more { justify-self: end; border: 0; color: #246962; background: transparent; font-size: 9px; }
+.device-empty { padding: 16px 0; color: #718784; font-size: 10px; }
+.resort-dashboard .remote-feedback:empty { display: none; }
+.resort-dashboard .remote-feedback:not(:empty) { margin: 12px 0 0; }
+.resort-dashboard .remotes-track[data-view="list"] { grid-template-columns: 1fr; }
+.resort-dashboard .remotes-track[data-view="list"] > .dashboard-device { grid-column: 1; }
+.resort-dashboard .remote-popup-content .dashboard-device { width: 100%; padding: 20px; }
+.resort-dashboard .remote-popup-content .dashboard-control { min-height: 58px; }
+.resort-dashboard .remote-popup-content .dashboard-device-copy strong { font-size: 15px; }
+.resort-dashboard .welcome { position: relative; width: 100%; max-width: none; margin: 0; padding: 0 0 22px; overflow: hidden; border: 1px solid #fff9; border-radius: 22px; background: #fcf8f0; box-shadow: 0 10px 30px #574c3410; }
+.resort-dashboard .assistant-label { position: absolute; z-index: 3; top: 14px; right: 14px; font-size: 8px; background: #f3fbf8e8; }
+.resort-dashboard .voice-stage.has-remotes .avatar-stage { width: 100%; max-width: none; height: auto; aspect-ratio: .94; margin: 0 0 -34px; border: 0; border-radius: 20px; box-shadow: none; }
+.resort-dashboard .mic-button { position: relative; z-index: 3; width: 68px; height: 68px; background: linear-gradient(130deg, #69c7b5, #057a6d); border: 5px solid #e4f5eb; }
+.resort-dashboard .welcome h2 { margin: 22px 12px 8px; font-size: clamp(16px, 1.6vw, 23px); color: #123e45; }
+.resort-dashboard .welcome > p { padding-inline: 18px; color: #748b90; }
+.resort-dashboard .welcome > p:not(.voice-status):not(.interim-transcript) { font-size: 10px; line-height: 1.9; }
+.resort-dashboard .suggestions { padding: 0 14px; gap: 7px; margin-top: 16px; }
+.resort-dashboard .suggestions button { padding: 9px 10px; font-size: 8px; background: #fffdf9; border: 1px solid #ece8de; color: #2f7881; }
+.resort-dashboard button:focus-visible, .resort-dashboard summary:focus-visible { outline: 3px solid #eeb657; outline-offset: 3px; }
+@media (min-width: 801px) and (max-width: 1150px) {
+  .dashboard-header-nav a { padding: 9px; font-size: 8px; gap: 5px; }
+  .resort-dashboard .voice-canvas { padding: 16px; }
+  .resort-dashboard .voice-stage.has-remotes { grid-template-columns: minmax(230px, .29fr) minmax(0, .71fr); gap: 12px; }
+  .resort-dashboard .remotes-panel { padding: 15px; }
+  .resort-dashboard .dashboard-device { padding: 10px; }
+  .dashboard-device-heading { gap: 6px; }
+  .dashboard-device-icon { flex-basis: 32px; height: 32px; }
+  .dashboard-device-copy strong { font-size: 9px; }
+  .dashboard-device-status { font-size: 6px; padding: 4px 6px; }
+  .dashboard-ac-display { gap: 5px; padding: 6px; grid-template-columns: 1fr 1fr 28px; }
+  .dashboard-temperature-reading strong { font-size: 38px; }
+  .dashboard-detail { gap: 5px; padding: 5px; }
+  .dashboard-detail svg { width: 18px; flex-basis: 18px; }
+  .dashboard-ac-actions { gap: 4px; flex-wrap: wrap; }
+  .resort-dashboard .dashboard-control { font-size: 6px; }
+}
+@media (max-width: 800px) {
+  .dashboard-header-nav, .resort-dashboard .header-property { display: none; }
+  .resort-dashboard .voice-canvas { display: block; padding: 12px; }
+  .resort-dashboard .voice-stage.has-remotes { display: block; }
+  .resort-dashboard .voice-stage { max-width: none; }
+  .resort-dashboard .welcome { max-width: 460px; margin-inline: auto; }
+  .resort-dashboard .remotes-panel { padding: 16px; }
+  .resort-dashboard .remotes-track { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .resort-dashboard .dashboard-device, .resort-dashboard .dashboard-device.device-ac { grid-column: span 1; }
+  .resort-dashboard .remotes-header strong { font-size: 18px; }
+  .resort-dashboard .remote-location { padding: 8px; font-size: 8px; }
+  .dashboard-room-tabs button { padding-inline: 12px; }
+}
+@media (max-width: 600px) {
+  .resort-dashboard .remotes-track { grid-template-columns: 1fr; }
+  .resort-dashboard .dashboard-device { padding: 13px; }
+  .dashboard-toolbar { gap: 8px; }
+  .dashboard-room-tabs { max-width: calc(100% - 82px); }
+  .dashboard-subtitle { font-size: 8px; }
+  .resort-dashboard .remote-popup-content .dashboard-device { padding: 12px; }
+  .resort-dashboard .remote-popup-content .dashboard-ac-actions { flex-wrap: wrap; }
+}

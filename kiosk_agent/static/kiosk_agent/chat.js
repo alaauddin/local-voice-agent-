@@ -9,7 +9,7 @@ import {
 } from "./js/audio-core.js";
 import {
   loadRemotes, bindRemotesUi, startRemotesRefresh,
-} from "./js/remotes.js?v=physical-remotes-2";
+} from "./js/remotes.js?v=dashboard-layout-3";
 import {
   setAvatar, preloadAvatarVideos, setMessagesOpen, updateControls, setBusy,
   cancelAutoStart, scheduleAutoRealtime, setConnection, loadMemory,

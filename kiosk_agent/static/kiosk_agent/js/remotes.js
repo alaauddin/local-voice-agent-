@@ -4,123 +4,35 @@ import { el } from "./dom.js";
 import { state } from "./state.js";
 import { headers, patchJson, postJson, uuid } from "./api.js";
 
-const REMOTE_ICONS = {
-  power: "⏻",
-  power_speed: "⏻≋",
-  plus: "＋",
-  minus: "−",
-  mode: "⟳",
-  fan: "≋",
-  light: "✦",
-  up: "⌃",
-  down: "⌄",
-  left: "‹",
-  right: "›",
-  ok: "OK",
-  back: "↩",
-  home: "⌂",
-  settings: "⚙",
-  info: "ⓘ",
-  guide: "GUIDE",
-  input: "INPUT",
-  play: "▶",
-  pause: "Ⅱ",
-  stop: "■",
-  record: "●",
-  rewind: "◀◀",
-  fast_forward: "▶▶",
-  previous: "|◀",
-  next: "▶|",
-  menu: "MENU",
-  volume: "◖",
-  volume_up: "VOL＋",
-  volume_down: "VOL−",
-  mute: "MUTE",
-  channel_up: "CH＋",
-  channel_down: "CH−",
-  cool: "❄",
-  heat: "☀",
-  dry: "💧",
-  swing_vertical: "↕",
-  swing_horizontal: "↔",
-  turbo: "⚡",
-  sleep: "☾",
-  timer: "◷",
-  eco: "♧",
-  number_0: "0",
-  number_1: "1",
-  number_2: "2",
-  number_3: "3",
-  number_4: "4",
-  number_5: "5",
-  number_6: "6",
-  number_7: "7",
-  number_8: "8",
-  number_9: "9",
-};
+import { buildRemoteCard, icon } from "./remote-cards.js";
 
-const AC_MODE_LABELS = {
-  auto: "تلقائي",
-  cool: "تبريد",
-  heat: "تدفئة",
-  dry: "تجفيف",
-  fan: "مروحة",
-};
-
-const AC_FAN_LABELS = {
-  auto: "تلقائية",
-  low: "منخفضة",
-  medium: "متوسطة",
-  high: "عالية",
-};
-
-const AC_FEATURE_LABELS = {
-  swing_vertical: "تأرجح رأسي",
-  swing_horizontal: "تأرجح أفقي",
-  turbo: "توربو",
-  sleep: "نوم",
-  eco: "اقتصادي",
-  quiet: "هادئ",
-  light: "إضاءة",
-  x_fan: "X-Fan",
-};
-
-const AC_FEATURE_ICONS = {
-  swing_vertical: "↕",
-  swing_horizontal: "↔",
-  turbo: "⚡",
-  sleep: "☾",
-  eco: "♧",
-  quiet: "◌",
-  light: "✦",
-  x_fan: "≋",
-};
-
-const AC_MODE_ICONS = {
-  auto: "A",
-  cool: "❄",
-  heat: "☀",
-  dry: "💧",
-  fan: "≋",
-};
-
-const AC_MODE_COLORS = {
-  auto: "auto",
-  cool: "cool",
-  heat: "heat",
-  dry: "dry",
-  fan: "fan",
-};
-
-const AC_MODES = Object.keys(AC_MODE_LABELS);
-const AC_FANS = Object.keys(AC_FAN_LABELS);
+const AC_MODES = ["auto", "cool", "heat", "dry", "fan"];
+const AC_FANS = ["auto", "low", "medium", "high"];
 const remotePopupDialog = document.querySelector("#remotePopupDialog");
 const remotePopupContent = document.querySelector("#remotePopupContent");
 const closeRemotePopupButton = document.querySelector("#closeRemotePopup");
 let expandedRemoteId = null;
+let selectedLocation = "";
 
-function remoteIcon(name) {
-  return REMOTE_ICONS[name] || "•";
+// A refresh should not close expanded options or drop keyboard focus.
+function preservePresentation(container) {
+  if (!container) return () => {};
+  const openCards = new Set([...container.querySelectorAll(".dashboard-extra[open]")]
+    .map(node => node.closest("[data-remote-id]")?.dataset.remoteId));
+  const active = container.contains(document.activeElement) ? document.activeElement : null;
+  const remoteId = active?.closest("[data-remote-id]")?.dataset.remoteId;
+  const identity = active ? JSON.stringify(active.dataset) : null;
+  return () => {
+    container.querySelectorAll(".dashboard-extra").forEach(node => {
+      node.open = openCards.has(node.closest("[data-remote-id]")?.dataset.remoteId);
+    });
+    if (!active || active.isConnected) return;
+    const replacement = [...container.querySelectorAll("button, summary")].find(node =>
+      node.tagName === active.tagName &&
+      node.closest("[data-remote-id]")?.dataset.remoteId === remoteId &&
+      JSON.stringify(node.dataset) === identity);
+    replacement?.focus({ preventScroll: true });
+  };
 }
 
 function setRemoteFeedback(message, kind = "") {
@@ -130,262 +42,6 @@ function setRemoteFeedback(message, kind = "") {
   el.remoteFeedback.classList.toggle("is-success", kind === "success");
 }
 
-function buildRemoteGrid(remote) {
-  const maxRow = remote.buttons.reduce((max, button) => Math.max(max, button.row), 0);
-  const maxCol = remote.buttons.reduce((max, button) => Math.max(max, button.column), 0);
-  const grid = document.createElement("div");
-  grid.className = "remote-grid";
-  grid.style.gridTemplateColumns = `repeat(${maxCol + 1}, minmax(0, 1fr))`;
-  remote.buttons
-    .slice()
-    .sort((a, b) => a.sort_order - b.sort_order || a.row - b.row || a.column - b.column)
-    .forEach((button) => {
-      const node = document.createElement("button");
-      node.type = "button";
-      node.className = "remote-button";
-      node.style.gridRow = String(button.row + 1);
-      node.style.gridColumn = String(button.column + 1);
-      node.dataset.buttonId = String(button.id);
-      node.dataset.key = button.key;
-      node.dataset.icon = button.icon || "";
-      node.disabled = !button.configured;
-      node.title = button.configured ? button.label : "غير مهيأ بعد";
-      node.setAttribute("aria-label", button.label);
-      const icon = document.createElement("span");
-      icon.className = "icon";
-      icon.setAttribute("aria-hidden", "true");
-      icon.textContent = remoteIcon(button.icon);
-      const label = document.createElement("span");
-      label.className = "remote-button-label";
-      label.textContent = button.label;
-      node.append(icon, label);
-      grid.appendChild(node);
-    });
-  return grid;
-}
-
-function stateItem(label, value) {
-  const item = document.createElement("div");
-  item.className = "ac-state-item";
-  const name = document.createElement("small");
-  name.textContent = label;
-  const current = document.createElement("strong");
-  current.textContent = value;
-  item.append(name, current);
-  return item;
-}
-
-function acControl(label, field, options = {}) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = `ac-control ${options.className || ""}`.trim();
-  button.dataset.field = field;
-  if (options.action) button.dataset.action = options.action;
-  if (options.icon) {
-    const icon = document.createElement("span");
-    icon.className = "ac-control-icon";
-    icon.setAttribute("aria-hidden", "true");
-    icon.textContent = options.icon;
-    button.appendChild(icon);
-  }
-  const copy = document.createElement("span");
-  copy.className = "ac-control-copy";
-  if (options.kicker) {
-    const kicker = document.createElement("small");
-    kicker.textContent = options.kicker;
-    copy.appendChild(kicker);
-  }
-  const text = document.createElement("span");
-  text.className = "ac-control-label";
-  text.textContent = label;
-  copy.appendChild(text);
-  button.appendChild(copy);
-  button.setAttribute("aria-label", options.ariaLabel || label);
-  button.classList.toggle("is-active", Boolean(options.active));
-  if (options.action === "toggle") {
-    button.setAttribute("aria-pressed", String(Boolean(options.active)));
-  }
-  return button;
-}
-
-function buildACControls(remote) {
-  const current = remote.ac_state;
-  const capabilities = remote.ac_capabilities || {};
-  const controls = document.createElement("div");
-  controls.className = "ac-controls ac-control-deck";
-  controls.dataset.deviceId = String(remote.id);
-
-  const primary = document.createElement("div");
-  primary.className = "ac-primary-controls";
-  const power = acControl(current.power ? "إيقاف" : "تشغيل", "power", {
-      action: "toggle",
-      active: current.power,
-      className: `ac-control-power ${current.power ? "will-stop" : "will-start"}`,
-      icon: "⏻",
-      ariaLabel: current.power ? "إيقاف المكيف" : "تشغيل المكيف",
-    });
-  const temperature = document.createElement("section");
-  temperature.className = "ac-temperature-control";
-  const temperatureLabel = document.createElement("span");
-  temperatureLabel.className = "ac-group-label";
-  temperatureLabel.textContent = "درجة الحرارة";
-  const temperatureButtons = document.createElement("div");
-  temperatureButtons.className = "ac-temperature-buttons";
-  temperatureButtons.append(
-    acControl("خفض", "temperature", {
-      action: "decrease", className: "ac-control-cooler", icon: "−",
-      ariaLabel: "خفض درجة الحرارة",
-    }),
-    acControl("رفع", "temperature", {
-      action: "increase", className: "ac-control-warmer", icon: "+",
-      ariaLabel: "رفع درجة الحرارة",
-    }),
-  );
-  temperature.append(temperatureLabel, temperatureButtons);
-  if (capabilities.power) primary.append(power);
-  if (capabilities.temperature) primary.append(temperature);
-
-  const cycles = document.createElement("div");
-  cycles.className = "ac-cycle-controls";
-  if (capabilities.mode) cycles.append(
-    acControl(AC_MODE_LABELS[current.mode] || current.mode, "mode", {
-      action: "cycle",
-      className: `ac-control-mode mode-${AC_MODE_COLORS[current.mode] || "auto"}`,
-      icon: AC_MODE_ICONS[current.mode] || "A",
-      kicker: "الوضع",
-      ariaLabel: `تغيير الوضع، الحالي ${AC_MODE_LABELS[current.mode] || current.mode}`,
-    }),
-  );
-  if (capabilities.fan) cycles.append(
-    acControl(AC_FAN_LABELS[current.fan] || current.fan, "fan", {
-      action: "cycle",
-      className: "ac-control-fan",
-      icon: "≋",
-      kicker: "سرعة المروحة",
-      ariaLabel: `تغيير سرعة المروحة، الحالية ${AC_FAN_LABELS[current.fan] || current.fan}`,
-    }),
-  );
-
-  const featuresLabel = document.createElement("span");
-  featuresLabel.className = "ac-group-label ac-features-label";
-  featuresLabel.textContent = "وظائف إضافية";
-  const features = document.createElement("div");
-  features.className = "ac-feature-controls";
-  Object.entries(AC_FEATURE_LABELS).forEach(([field, label]) => {
-    if (!capabilities[field]) return;
-    features.appendChild(acControl(label, field, {
-      action: "toggle",
-      active: current[field],
-      icon: AC_FEATURE_ICONS[field],
-      className: `ac-feature-${field}`,
-    }));
-  });
-
-  if (primary.childElementCount) controls.append(primary);
-  if (cycles.childElementCount) controls.append(cycles);
-  if (features.childElementCount) controls.append(featuresLabel, features);
-  return controls;
-}
-
-function buildACState(remote) {
-  const state = remote.ac_state;
-  const panel = document.createElement("div");
-  panel.className = "ac-state";
-  if (!state) {
-    panel.classList.add("is-unavailable");
-    panel.textContent = "حالة المكيف غير متاحة";
-    return panel;
-  }
-
-  const summary = document.createElement("div");
-  summary.className = "ac-state-summary ac-lcd";
-  const lcdStatus = document.createElement("div");
-  lcdStatus.className = "ac-lcd-status";
-  const statusDot = document.createElement("span");
-  statusDot.className = "ac-lcd-dot";
-  const power = document.createElement("span");
-  power.className = `ac-power ${state.power ? "is-on" : "is-off"}`;
-  power.textContent = state.power ? "يعمل" : "متوقف";
-  lcdStatus.append(statusDot, power);
-  const lcdTemperature = document.createElement("div");
-  lcdTemperature.className = "ac-lcd-temperature";
-  const temperature = document.createElement("strong");
-  temperature.className = "ac-temperature";
-  temperature.textContent = String(state.temperature);
-  const unit = document.createElement("span");
-  unit.textContent = "°C";
-  lcdTemperature.append(temperature, unit);
-
-  const details = document.createElement("div");
-  details.className = "ac-state-details ac-lcd-details";
-  details.append(
-    stateItem("الوضع", AC_MODE_LABELS[state.mode] || state.mode),
-    stateItem("المروحة", AC_FAN_LABELS[state.fan] || state.fan),
-  );
-  const lcdFeatures = document.createElement("div");
-  lcdFeatures.className = "ac-lcd-features";
-  Object.entries(AC_FEATURE_LABELS).forEach(([key, label]) => {
-    if (!state[key]) return;
-    const feature = document.createElement("span");
-    feature.className = `is-${key}`;
-    feature.title = label;
-    feature.setAttribute("aria-label", label);
-    feature.textContent = AC_FEATURE_ICONS[key];
-    lcdFeatures.appendChild(feature);
-  });
-  if (!lcdFeatures.childElementCount) {
-    const empty = document.createElement("small");
-    empty.textContent = "لا وظائف إضافية مفعّلة";
-    lcdFeatures.appendChild(empty);
-  }
-  summary.append(lcdStatus, lcdTemperature, details, lcdFeatures);
-  panel.dataset.power = state.power ? "on" : "off";
-  panel.dataset.mode = state.mode;
-  panel.append(summary);
-  panel.appendChild(buildACControls(remote));
-  return panel;
-}
-
-function buildRemoteCard(remote, expanded = false) {
-  const slide = document.createElement("article");
-  slide.className = "remote-slide";
-  slide.dataset.remoteId = String(remote.id);
-  slide.classList.toggle("is-expanded", expanded);
-  const heading = document.createElement("div");
-  heading.className = "remote-slide-heading";
-  const copy = document.createElement("div");
-  const name = document.createElement("strong");
-  name.textContent = remote.name;
-  const location = document.createElement("small");
-  location.textContent =
-    [remote.location, remote.device_name].filter(Boolean).join(" · ") || "داخل الشاليه";
-  copy.append(name, location);
-  const isAC = remote.device_type === "ac";
-  const configuredCount = remote.buttons.filter((button) => button.configured).length;
-  const headingActions = document.createElement("div");
-  headingActions.className = "remote-heading-actions";
-  const count = document.createElement("span");
-  count.className = "remote-kind-badge";
-  count.textContent = isAC
-    ? (remote.ac_state?.power ? "يعمل الآن" : "متوقف")
-    : `${configuredCount} أوامر`;
-  if (isAC) count.classList.add(remote.ac_state?.power ? "is-on" : "is-off");
-  headingActions.appendChild(count);
-  if (!expanded) {
-    const open = document.createElement("button");
-    open.type = "button";
-    open.className = "remote-open-button";
-    open.dataset.openRemote = String(remote.id);
-    open.textContent = "•••";
-    open.setAttribute("aria-label", `فتح جهاز التحكم ${remote.name}`);
-    headingActions.appendChild(open);
-  }
-  heading.append(copy, headingActions);
-  slide.classList.toggle("ac-remote-slide", isAC);
-  slide.append(heading, isAC ? buildACState(remote) : buildRemoteGrid(remote));
-  return slide;
-}
-
 function renderRemotePopup() {
   if (!remotePopupContent || !expandedRemoteId) return;
   const remote = state.remotes.find((item) => item.id === expandedRemoteId);
@@ -393,11 +49,14 @@ function renderRemotePopup() {
     remotePopupDialog?.close();
     return;
   }
+  const restore = preservePresentation(remotePopupContent);
   remotePopupContent.replaceChildren(buildRemoteCard(remote, true));
+  restore();
 }
 
 function renderRemotes() {
   if (!el.remotesPanel || !el.voiceStage) return;
+  const restore = preservePresentation(el.remotesPanel);
   el.remotesTrack.innerHTML = "";
   if (!state.remotes.length) {
     el.remotesPanel.hidden = true;
@@ -411,7 +70,24 @@ function renderRemotes() {
   el.remoteTitle.textContent = "أجهزة الشاليه";
   el.remoteLocation.textContent = `${state.remotes.length} أجهزة متاحة`;
   el.voiceStage.classList.add("has-remotes");
-  state.remotes.forEach((remote) => el.remotesTrack.appendChild(buildRemoteCard(remote)));
+  const locations = [...new Set(state.remotes.map(remote => remote.location).filter(Boolean))];
+  if (!locations.includes(selectedLocation)) selectedLocation = "";
+  const filters = document.querySelector("#remoteFilters");
+  if (filters) {
+    filters.replaceChildren();
+    ["", ...locations].forEach(location => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.location = location;
+      button.textContent = location || "جميع الغرف";
+      button.setAttribute("aria-pressed", String(location === selectedLocation));
+      filters.append(button);
+    });
+  }
+  state.remotes.filter(remote => !selectedLocation || remote.location === selectedLocation)
+    .slice().sort((a, b) => Number(b.device_type === "ac") - Number(a.device_type === "ac"))
+    .forEach(remote => el.remotesTrack.appendChild(buildRemoteCard(remote)));
+  restore();
   if (remotePopupDialog?.open) renderRemotePopup();
 }
 
@@ -586,6 +262,30 @@ async function updateACState(remote, node) {
 
 function bindRemotesUi() {
   if (!el.remotesPanel) return;
+  document.querySelector("#remoteFilters")?.addEventListener("click", event => {
+    const button = event.target.closest("button[data-location]");
+    if (!button) return;
+    selectedLocation = button.dataset.location;
+    renderRemotes();
+  });
+  document.querySelectorAll("[data-remote-view]").forEach(button => {
+    button.addEventListener("click", () => {
+      el.remotesTrack.dataset.view = button.dataset.remoteView;
+      document.querySelectorAll("[data-remote-view]").forEach(item => {
+        item.setAttribute("aria-pressed", String(item === button));
+      });
+    });
+  });
+  document.querySelectorAll("[data-dashboard-icon]").forEach(node => {
+    node.replaceChildren(icon(node.dataset.dashboardIcon));
+  });
+  document.querySelectorAll(".dashboard-header-nav a").forEach(link => {
+    link.addEventListener("click", () => {
+      document.querySelectorAll(".dashboard-header-nav a").forEach(item => {
+        item.classList.toggle("is-current", item === link);
+      });
+    });
+  });
   el.workspaceTabs?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-workspace]");
     if (!button) return;
@@ -609,7 +309,7 @@ function bindRemotesUi() {
   });
 
   const handleRemoteInteraction = (event, container) => {
-    const openButton = event.target.closest(".remote-open-button");
+    const openButton = event.target.closest("[data-open-remote]");
     if (openButton && container.contains(openButton)) {
       event.preventDefault();
       const remote = state.remotes.find(
@@ -619,7 +319,7 @@ function bindRemotesUi() {
       return;
     }
     const acNode = event.target.closest(".ac-control");
-    if (acNode && container.contains(acNode)) {
+    if (acNode && !acNode.disabled && container.contains(acNode)) {
       event.preventDefault();
       const controls = acNode.closest(".ac-controls");
       const remote = state.remotes.find((item) => item.id === Number(controls?.dataset.deviceId));
