@@ -69,6 +69,33 @@ button:focus-visible, a:focus-visible { outline: 3px solid rgba(117,207,192,.7);
 }
 .primary-button { color: #18201e; background: var(--gold); border-color: #ffd08d; font-weight: 700; }
 .secondary-button { color: #15201e; background: var(--mint); border-color: #a5e9de; }
+.remote-dialog {
+  width: min(520px, calc(100vw - 28px));
+  max-height: min(90vh, 760px);
+  padding: 0;
+  overflow: auto;
+  color: #eff5f2;
+  border: 1px solid rgba(117,207,192,.24);
+  border-radius: 20px;
+  background: linear-gradient(145deg, #202e2a, #151e1c);
+  box-shadow: 0 28px 90px rgba(0,0,0,.55);
+}
+.remote-dialog::backdrop { background: rgba(5,10,9,.72); backdrop-filter: blur(5px); }
+.remote-dialog form { display: grid; gap: 16px; padding: 24px; }
+.remote-dialog form > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.remote-dialog form > header small { color: #94aaa3; }
+.remote-dialog h2 { margin: 4px 0 0; font-size: 20px; }
+.remote-dialog p { margin: 0; color: #a9bbb5; font-size: 12px; line-height: 1.9; }
+.remote-dialog label { display: grid; gap: 7px; }
+.remote-dialog label > span { color: #d4e0dc; }
+.remote-dialog label b { color: var(--gold); }
+.remote-dialog label small { color: #859892; }
+.remote-dialog footer { display: flex; justify-content: flex-start; gap: 10px; padding-top: 4px; }
+.remote-dialog footer button { min-width: 112px; }
+.remote-dialog .dialog-close { width: 36px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 10px; color: #c6d4cf; background: #17211f; font-size: 24px; line-height: 1; }
+.dialog-error { min-height: 18px; color: #ff9a91; font-size: 11px; }
+.move-row-button { min-height: 42px; padding: 8px 15px; border: 1px solid var(--line); border-radius: 10px; color: #edf5f2; background: #293634; }
+.remote-dialog button:disabled { cursor: wait; opacity: .65; }
 .save-status { min-width: 130px; color: #aab9b5; font-size: 12px; }
 .save-status.error { color: #ff9a91; }
 .save-status.success { color: #8ce1b4; }

@@ -9,6 +9,14 @@ const addButton = document.querySelector("#addButton");
 const buttonCount = document.querySelector("#buttonCount");
 const configuredCount = document.querySelector("#configuredCount");
 const stepsNav = document.querySelector(".config-steps");
+const newRemoteButton = document.querySelector("#newRemoteButton");
+const newRemoteDialog = document.querySelector("#newRemoteDialog");
+const newRemoteForm = document.querySelector("#newRemoteForm");
+const newRemoteName = document.querySelector("#newRemoteName");
+const newRemoteLocation = document.querySelector("#newRemoteLocation");
+const newRemoteType = document.querySelector("#newRemoteType");
+const newRemoteError = document.querySelector("#newRemoteError");
+const createRemoteSubmit = document.querySelector("#createRemoteSubmit");
 const remoteTypeBadge = document.querySelector("#remoteTypeBadge");
 const rawWorkspace = document.querySelector("#rawWorkspace");
 const acWorkspace = document.querySelector("#acWorkspace");
@@ -120,6 +128,43 @@ function endpoint(pattern, remoteId) {
 function setStatus(message, kind = "") {
   saveStatus.textContent = message;
   saveStatus.className = `save-status ${kind}`.trim();
+}
+
+async function createRemote(event) {
+  event.preventDefault();
+  if (dirty && !window.confirm("لديك تغييرات غير محفوظة. هل تريد تجاهلها وإنشاء جهاز جديد؟")) return;
+
+  newRemoteError.textContent = "";
+  createRemoteSubmit.disabled = true;
+  createRemoteSubmit.textContent = "جارٍ إنشاء الجهاز…";
+  try {
+    const response = await fetch(shell.dataset.createRemoteUrl, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken },
+      body: JSON.stringify({
+        name: newRemoteName.value.trim(),
+        location: newRemoteLocation.value.trim(),
+        device_type: newRemoteType.value,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || "تعذر إنشاء جهاز التحكم.");
+
+    const remote = data.remote;
+    const label = remote.location ? `${remote.name} — ${remote.location}` : remote.name;
+    remoteSelect.add(new Option(label, String(remote.id)));
+    remoteSelect.value = String(remote.id);
+    dirty = false;
+    newRemoteDialog.close();
+    newRemoteForm.reset();
+    remoteSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  } catch (error) {
+    newRemoteError.textContent = error.message;
+  } finally {
+    createRemoteSubmit.disabled = false;
+    createRemoteSubmit.textContent = "إنشاء الجهاز";
+  }
 }
 
 function setCaptureStatus(message, kind = "") {
@@ -769,6 +814,16 @@ remoteSelect.addEventListener("change", () => {
   captureGeneration += 1;
   setCaptureStatus("");
   loadRemote().catch((error) => setStatus(error.message, "error"));
+});
+newRemoteButton.addEventListener("click", () => {
+  newRemoteError.textContent = "";
+  newRemoteForm.reset();
+  newRemoteDialog.showModal();
+  newRemoteName.focus();
+});
+newRemoteForm.addEventListener("submit", createRemote);
+document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+  button.addEventListener("click", () => newRemoteDialog.close());
 });
 stepsNav.addEventListener("click", (event) => {
   const target = event.target.closest("[data-step]");

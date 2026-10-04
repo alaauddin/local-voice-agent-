@@ -12,12 +12,14 @@ from kiosk_agent.views import (
     button_config_save_view,
     button_config_sync_ip_view,
     button_config_view,
+    remote_create_view,
 )
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="kiosk-chat", permanent=False)),
     path("chat/", KioskPageView.as_view(), name="kiosk-chat"),
     path("button-config/", button_config_view, name="button-config"),
+    path("button-config/remotes/create/", remote_create_view, name="remote-create"),
     path(
         "button-config/remotes/<int:remote_id>/",
         button_config_data_view,

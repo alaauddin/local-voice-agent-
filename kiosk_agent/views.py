@@ -15,6 +15,7 @@ from django.db.models import F
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
+from django.utils.text import slugify
 from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import TemplateView
 from rest_framework import parsers, status
@@ -110,6 +111,50 @@ def button_config_view(request):
                 {"value": value, "label": label} for value, label in RemoteButtonIcon.choices
             ],
         },
+    )
+
+
+@staff_member_required
+@require_POST
+def remote_create_view(request):
+    try:
+        payload = json.loads(request.body or "{}")
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return JsonResponse({"detail": "Invalid JSON payload."}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"detail": "Provide remote details."}, status=400)
+
+    name = payload.get("name")
+    location = payload.get("location", "")
+    device_type = payload.get("device_type", RemoteControl.DeviceType.RAW)
+    if not isinstance(name, str) or not name.strip() or len(name.strip()) > 120:
+        return JsonResponse({"detail": "Enter a remote name up to 120 characters."}, status=400)
+    if not isinstance(location, str) or len(location.strip()) > 120:
+        return JsonResponse({"detail": "Location must be 120 characters or fewer."}, status=400)
+    if device_type not in RemoteControl.DeviceType.values:
+        return JsonResponse({"detail": "Choose a valid remote type."}, status=400)
+
+    name = name.strip()
+    base_slug = slugify(name)[:100].strip("-") or "remote"
+    suffix = uuid.uuid4().hex[:8]
+    remote = RemoteControl.objects.create(
+        name=name,
+        location=location.strip(),
+        device_type=device_type,
+        slug=f"{base_slug}-{suffix}",
+        sort_order=(RemoteControl.objects.order_by("-sort_order")
+                    .values_list("sort_order", flat=True).first() or 0) + 1,
+    )
+    return JsonResponse(
+        {
+            "remote": {
+                "id": remote.pk,
+                "name": remote.name,
+                "location": remote.location,
+                "device_type": remote.device_type,
+            }
+        },
+        status=201,
     )
 
 

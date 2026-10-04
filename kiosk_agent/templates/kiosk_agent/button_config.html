@@ -25,6 +25,7 @@
 
   <main class="config-shell"
         data-load-pattern="{% url 'button-config-data' 0 %}"
+        data-create-remote-url="{% url 'remote-create' %}"
         data-save-pattern="{% url 'button-config-save' 0 %}"
         data-sync-ip-pattern="{% url 'button-config-sync-ip' 0 %}"
         data-ac-test-pattern="{% url 'button-config-ac-test' 0 %}"
@@ -46,6 +47,7 @@
           {% endfor %}
         </select>
       </label>
+      <button id="newRemoteButton" class="secondary-button" type="button">＋ جهاز جديد</button>
       <label class="columns-field" data-step-panel="buttons" hidden>
         <span>عدد الأعمدة</span>
         <select id="columnCount">
@@ -60,6 +62,39 @@
       <button id="saveLayout" class="primary-button" type="button">حفظ الترتيب والإعدادات</button>
       <span id="saveStatus" class="save-status" role="status" aria-live="polite"></span>
     </section>
+
+    <dialog id="newRemoteDialog" class="remote-dialog" aria-labelledby="newRemoteTitle">
+      <form id="newRemoteForm">
+        <header>
+          <div>
+            <small>إعداد الأجهزة</small>
+            <h2 id="newRemoteTitle">إضافة جهاز تحكم</h2>
+          </div>
+          <button class="dialog-close" type="button" data-close-dialog aria-label="إغلاق">×</button>
+        </header>
+        <p>أنشئ الجهاز أولًا، ثم أضف أزراره وسجّل إشارات الريموت.</p>
+        <label>
+          <span>اسم الجهاز <b aria-hidden="true">*</b></span>
+          <input id="newRemoteName" name="name" type="text" maxlength="120" required autofocus placeholder="مثال: ريموت المروحة">
+        </label>
+        <label>
+          <span>الموقع <small>اختياري</small></span>
+          <input id="newRemoteLocation" name="location" type="text" maxlength="120" placeholder="مثال: غرفة النوم">
+        </label>
+        <label>
+          <span>نوع الجهاز</span>
+          <select id="newRemoteType" name="device_type">
+            <option value="raw">ريموت IR عادي</option>
+            <option value="ac">مكيف</option>
+          </select>
+        </label>
+        <small id="newRemoteError" class="dialog-error" role="alert"></small>
+        <footer>
+          <button type="button" class="move-row-button" data-close-dialog>إلغاء</button>
+          <button id="createRemoteSubmit" type="submit" class="primary-button">إنشاء الجهاز</button>
+        </footer>
+      </form>
+    </dialog>
 
     <section class="button-overview" aria-label="ملخص الأزرار">
       <div>
