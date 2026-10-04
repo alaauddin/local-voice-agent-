@@ -93,6 +93,40 @@ class ACControlTests(TestCase):
         self.assertNotIn("quiet", sent)
         self.assertNotIn("swing_vertical", sent)
 
+    @patch("kiosk_agent.ac_control.httpx.Client")
+    def test_version_conflict_fetches_current_state_and_retries_once(self, client_cls):
+        conflict = type("Response", (), {})()
+        conflict.status_code = 409
+        conflict.json = lambda: {
+            "success": False,
+            "message": "state_version is older than the ESP32 state",
+        }
+        
+        current = type("Response", (), {})()
+        current.status_code = 200
+        current_payload = confirmed_payload(temperature=19, version=7)
+        current_payload.pop("success")
+        current.json = lambda: current_payload
+        retried = type("Response", (), {})()
+        retried.status_code = 200
+        retried.json = lambda: confirmed_payload(temperature=22, version=8)
+        client = client_cls.return_value.__enter__.return_value
+        client.post.side_effect = (conflict, retried)
+        client.get.return_value = current
+
+        state = set_ac_state(self.device.pk, {"temperature": 22}, request_id="req-retry")
+
+        self.assertEqual(state.temperature, 22)
+        self.assertEqual(state.state_version, 8)
+        self.assertEqual(client.post.call_count, 2)
+        client.get.assert_called_once_with("http://192.168.1.50/api/ac/state")
+        first_payload = client.post.call_args_list[0].kwargs["json"]
+        retry_payload = client.post.call_args_list[1].kwargs["json"]
+        self.assertEqual(first_payload["state_version"], 1)
+        self.assertEqual(retry_payload["state_version"], 8)
+        self.assertEqual(retry_payload["temperature"], 22)
+        self.assertEqual(retry_payload["request_id"], "req-retry")
+
     def test_unsupported_field_is_rejected_before_contacting_esp32(self):
         with self.assertRaisesMessage(
             ACControlError,

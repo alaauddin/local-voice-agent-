@@ -207,7 +207,12 @@ def _controller_url(device: RemoteControl) -> str:
     return f"http://{device.device_ip}/api/ac/state"
 
 
-def _parse_esp32_response(response: httpx.Response, device: RemoteControl) -> dict:
+def _parse_esp32_response(
+    response: httpx.Response,
+    device: RemoteControl,
+    *,
+    require_success: bool = True,
+) -> dict:
     if not 200 <= response.status_code < 300:
         message = "ESP32 rejected the AC command."
         try:
@@ -224,7 +229,7 @@ def _parse_esp32_response(response: httpx.Response, device: RemoteControl) -> di
         payload = response.json()
     except ValueError as exc:
         raise ACControlError("invalid_response", "ESP32 returned invalid JSON.") from exc
-    if not isinstance(payload, dict) or payload.get("success") is not True:
+    if not isinstance(payload, dict) or (require_success and payload.get("success") is not True):
         raise ACControlError("controller_error", "ESP32 did not confirm transmission.")
     for field, expected in (
         ("brand", device.brand),
@@ -241,6 +246,24 @@ def _parse_esp32_response(response: httpx.Response, device: RemoteControl) -> di
         raise ACControlError("invalid_response", "ESP32 returned no AC state.")
     payload["state"] = _validate_state_values(state, require_all=True)
     return payload
+
+
+def _is_stale_version_response(response: httpx.Response) -> bool:
+    if response.status_code != 409:
+        return False
+    try:
+        message = response.json().get("message", "")
+    except (AttributeError, TypeError, ValueError):
+        return False
+    return isinstance(message, str) and message.casefold().startswith("state_version is older")
+
+
+def _apply_confirmed_state(state: ACState, confirmed: dict) -> None:
+    for field, value in confirmed["state"].items():
+        setattr(state, field, value)
+    state.state_version = confirmed["state_version"]
+    updated_at = confirmed.get("updated_at", 0)
+    state.esp32_updated_at = updated_at if isinstance(updated_at, int) and updated_at >= 0 else 0
 
 
 @transaction.atomic
@@ -292,6 +315,21 @@ def set_ac_state(device_id: int, changes: dict, *, request_id: str | None = None
             follow_redirects=False,
         ) as client:
             response = client.post(_controller_url(device), json=payload)
+            if _is_stale_version_response(response):
+                current_response = client.get(_controller_url(device))
+                current = _parse_esp32_response(
+                    current_response,
+                    device,
+                    require_success=False,
+                )
+                if current["state_version"] < state.state_version:
+                    raise ACControlError(
+                        "stale_response",
+                        "ESP32 returned an older AC state while resolving a version conflict.",
+                    )
+                _apply_confirmed_state(state, current)
+                payload = {**payload, "state_version": current["state_version"] + 1}
+                response = client.post(_controller_url(device), json=payload)
     except httpx.TimeoutException as exc:
         raise ACControlError("timeout", "AC controller timed out.") from exc
     except httpx.HTTPError as exc:
@@ -300,11 +338,7 @@ def set_ac_state(device_id: int, changes: dict, *, request_id: str | None = None
     confirmed = _parse_esp32_response(response, device)
     if confirmed["state_version"] < state.state_version:
         raise ACControlError("stale_response", "ESP32 returned an older AC state.")
-    for field, value in confirmed["state"].items():
-        setattr(state, field, value)
-    state.state_version = confirmed["state_version"]
-    updated_at = confirmed.get("updated_at", 0)
-    state.esp32_updated_at = updated_at if isinstance(updated_at, int) and updated_at >= 0 else 0
+    _apply_confirmed_state(state, confirmed)
     state.save()
     return state
 
