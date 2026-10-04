@@ -46,7 +46,7 @@
           {% endfor %}
         </select>
       </label>
-      <label class="columns-field">
+      <label class="columns-field" data-step-panel="buttons" hidden>
         <span>عدد الأعمدة</span>
         <select id="columnCount">
           <option value="1">1</option>
@@ -56,12 +56,38 @@
         </select>
       </label>
       <span id="remoteTypeBadge" class="remote-type-badge"></span>
-      <button id="addButton" class="secondary-button" type="button">+ زر جديد</button>
+      <button id="addButton" class="secondary-button" type="button">＋ إضافة زر</button>
       <button id="saveLayout" class="primary-button" type="button">حفظ الترتيب والإعدادات</button>
       <span id="saveStatus" class="save-status" role="status" aria-live="polite"></span>
     </section>
 
-    <section class="remote-settings" aria-label="إعدادات جهاز التحكم">
+    <section class="button-overview" aria-label="ملخص الأزرار">
+      <div>
+        <span class="overview-icon">▦</span>
+        <span><strong id="buttonCount">0</strong><small>إجمالي الأزرار</small></span>
+      </div>
+      <div>
+        <span class="overview-icon ready-icon">✓</span>
+        <span><strong id="configuredCount">0</strong><small>أزرار مهيأة</small></span>
+      </div>
+      <p>اختر زرًا لتعديل إعداداته، أو أضف زرًا جديدًا. إعداد الاتصال متاح في خطوة «الجهاز».</p>
+    </section>
+
+    <nav class="config-steps" aria-label="خطوات إعداد جهاز التحكم">
+      <button type="button" data-step="device" class="active" aria-current="step">
+        <span>١</span><span><strong>الجهاز</strong><small>الاتصال والعرض</small></span>
+      </button>
+      <span class="step-connector"></span>
+      <button type="button" data-step="buttons">
+        <span>٢</span><span><strong>الأزرار</strong><small>الترتيب والإضافة</small></span>
+      </button>
+      <span class="step-connector"></span>
+      <button type="button" data-step="button-settings">
+        <span>٣</span><span><strong>إعداد الزر</strong><small>الوظيفة وإشارة IR</small></span>
+      </button>
+    </nav>
+
+    <section class="remote-settings" data-step-panel="device" aria-label="إعدادات جهاز التحكم">
       <strong>حالة جهاز التحكم</strong>
       <label class="device-name-field">
         <span>Device name</span>
@@ -86,7 +112,7 @@
       </label>
     </section>
 
-    <section id="acWorkspace" class="ac-workspace" hidden>
+    <section id="acWorkspace" class="ac-workspace" data-step-panel="device" hidden>
       <article class="ac-setup-card">
         <header class="section-heading">
           <div>
@@ -178,8 +204,8 @@
       </article>
     </section>
 
-    <section id="rawWorkspace" class="workspace">
-      <div class="layout-card">
+    <section id="rawWorkspace" class="workspace" hidden>
+      <div class="layout-card" data-step-panel="buttons">
         <header>
           <div>
             <small>اسحب وأفلت لإعادة الترتيب</small>
@@ -188,10 +214,15 @@
           <span class="drag-hint">اسحب من المقبض ⋮⋮</span>
         </header>
         <div id="buttonGrid" class="button-grid" aria-label="ترتيب الأزرار"></div>
-        <div id="emptyState" class="empty-state" hidden>أضف أول زر لهذا الجهاز.</div>
+        <div id="emptyState" class="empty-state" hidden>
+          <span class="empty-icon">＋</span>
+          <strong>ابدأ بإضافة أزرار هذا الجهاز</strong>
+          <p>أنشئ زرًا لكل وظيفة تحتاجها، ثم سجّل إشارة IR أو أضف بياناتها يدويًا.</p>
+          <button class="secondary-button" type="button" data-add-first>＋ إضافة أول زر</button>
+        </div>
       </div>
 
-      <aside class="editor-card" id="buttonEditor" aria-label="إعداد الزر">
+      <aside class="editor-card" id="buttonEditor" data-step-panel="button-settings" aria-label="إعداد الزر">
         <div id="editorEmpty" class="editor-empty">
           <span>☝</span>
           <p>اختر زرًا لتعديل إعداداته.</p>

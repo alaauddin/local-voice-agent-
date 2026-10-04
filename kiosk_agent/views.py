@@ -1,4 +1,5 @@
 import json
+import logging
 import secrets
 import uuid
 from datetime import timedelta
@@ -66,6 +67,9 @@ from .serializers import (
     RemoteControlPublicSerializer,
 )
 from .services import AgentBusyError, enqueue_message
+from .tasks import sync_remote_ips_task
+
+logger = logging.getLogger(__name__)
 
 
 def _serialize_config_button(button):
@@ -461,6 +465,10 @@ class KioskPageView(TemplateView):
         has_cookie = valid_kiosk_cookie(request.COOKIES.get(KIOSK_COOKIE_NAME, ""))
         if expected and not has_cookie and not secrets.compare_digest(supplied, expected):
             return HttpResponseForbidden("Kiosk access is not provisioned.")
+        try:
+            sync_remote_ips_task.delay()
+        except Exception:
+            logger.exception("Could not enqueue remote IP sync after kiosk page load.")
         response = super().get(request, *args, **kwargs)
         response.set_cookie(
             KIOSK_COOKIE_NAME,

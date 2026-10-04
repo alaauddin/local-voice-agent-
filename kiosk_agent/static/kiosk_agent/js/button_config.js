@@ -6,6 +6,9 @@ const columnCount = document.querySelector("#columnCount");
 const grid = document.querySelector("#buttonGrid");
 const emptyState = document.querySelector("#emptyState");
 const addButton = document.querySelector("#addButton");
+const buttonCount = document.querySelector("#buttonCount");
+const configuredCount = document.querySelector("#configuredCount");
+const stepsNav = document.querySelector(".config-steps");
 const remoteTypeBadge = document.querySelector("#remoteTypeBadge");
 const rawWorkspace = document.querySelector("#rawWorkspace");
 const acWorkspace = document.querySelector("#acWorkspace");
@@ -237,6 +240,24 @@ function renderRemoteType() {
   remoteTypeBadge.textContent = isAC ? "مكيف AC" : "ريموت RAW IR";
   remoteTypeBadge.classList.toggle("ac", isAC);
   saveButton.textContent = isAC ? "حفظ إعدادات المكيف" : "حفظ الترتيب والإعدادات";
+  stepsNav.classList.toggle("ac-mode", isAC);
+  showStep(isAC ? "device" : "buttons");
+}
+
+function showStep(stepName) {
+  const step = isACRemote() ? "device" : stepName;
+  document.querySelectorAll("[data-step-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.stepPanel !== step || (panel.id === "acWorkspace" && !isACRemote());
+  });
+  document.querySelectorAll("[data-step]").forEach((button) => {
+    const active = button.dataset.step === step;
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "step");
+    else button.removeAttribute("aria-current");
+  });
+  rawWorkspace.hidden = isACRemote() || !["buttons", "button-settings"].includes(step);
+  rawWorkspace.classList.add("single-panel");
+  rawWorkspace.classList.toggle("editing-step", step === "button-settings");
 }
 
 function fillSelect(select, choices, includeEmpty = false) {
@@ -327,6 +348,10 @@ function renderGrid() {
     card.append(handle, icon, label, position);
     grid.appendChild(card);
   });
+  buttonCount.textContent = String(buttons.length);
+  configuredCount.textContent = String(buttons.filter((button) =>
+    Boolean(button.configured || (button.command_url && (button.raw || []).length))
+  ).length);
   emptyState.hidden = buttons.length > 0;
 }
 
@@ -335,6 +360,7 @@ function selectButton(nextUid) {
   selectedUid = nextUid;
   renderGrid();
   renderEditor();
+  showStep("button-settings");
 }
 
 async function loadRemote() {
@@ -500,18 +526,29 @@ function unusedKey() {
 }
 
 function addNewButton() {
+  if (!remoteSelect.value || isACRemote()) return;
   commitEditor();
   const choice = unusedKey();
+  const used = new Set(buttons.map((button) => button.key));
+  let key = choice?.value;
+  let label = choice?.label;
   if (!choice) {
-    setStatus("استُخدمت جميع وظائف الأزرار المتاحة.", "error");
-    return;
+    let index = 1;
+    while (used.has(`custom_action_${index}`)) index += 1;
+    key = `custom_action_${index}`;
+    label = "إجراء مخصص";
   }
+  const iconByKey = {
+    power_on: "power", power_off: "power", power_speed: "power_speed",
+    speed_up: "plus", temp_up: "plus", speed_down: "minus", temp_down: "minus",
+    mode: "mode", fan: "fan", on: "power", off: "power",
+  };
   const button = {
     id: null,
     client_id: `new-${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`,
-    key: choice.value,
-    label: choice.label,
-    icon: "",
+    key,
+    label,
+    icon: iconByKey[key] || "",
     row: 0,
     column: 0,
     sort_order: buttons.length,
@@ -529,6 +566,9 @@ function addNewButton() {
   markDirty();
   renderGrid();
   renderEditor();
+  showStep("button-settings");
+  fields.label.focus();
+  fields.label.select();
 }
 
 function moveSelected(offset) {
@@ -722,12 +762,27 @@ document.querySelectorAll("[data-move]").forEach((button) => {
   button.addEventListener("click", () => moveSelected(Number(button.dataset.move)));
 });
 remoteSelect.addEventListener("change", () => {
+  if (dirty && !window.confirm("لديك تغييرات غير محفوظة. هل تريد تجاهلها والانتقال إلى جهاز آخر؟")) {
+    remoteSelect.value = activeRemote?.id || "";
+    return;
+  }
   captureGeneration += 1;
   setCaptureStatus("");
   loadRemote().catch((error) => setStatus(error.message, "error"));
 });
+stepsNav.addEventListener("click", (event) => {
+  const target = event.target.closest("[data-step]");
+  if (!target) return;
+  if (target.dataset.step === "button-settings" && !currentButton()) {
+    setStatus("أضف زرًا أو اختر زرًا من القائمة أولًا.", "error");
+    showStep("buttons");
+    return;
+  }
+  showStep(target.dataset.step);
+});
 columnCount.addEventListener("change", () => { markDirty(); renderGrid(); });
 addButton.addEventListener("click", addNewButton);
+document.querySelector("[data-add-first]").addEventListener("click", addNewButton);
 saveButton.addEventListener("click", () => saveLayout());
 captureButton.addEventListener("click", startCapture);
 
