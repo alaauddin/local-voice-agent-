@@ -13,6 +13,10 @@ const remotePopupContent = document.querySelector("#remotePopupContent");
 const closeRemotePopupButton = document.querySelector("#closeRemotePopup");
 let expandedRemoteId = null;
 let selectedLocation = "";
+let remoteSyncComplete = false;
+let remoteSyncInFlight = null;
+let remoteSyncAttempts = 0;
+let nextRemoteSyncAt = 0;
 
 // A refresh should not close expanded options or drop keyboard focus.
 function preservePresentation(container) {
@@ -164,9 +168,42 @@ async function loadRemotes() {
   }
 }
 
+async function syncRemoteIps() {
+  if (remoteSyncComplete || Date.now() < nextRemoteSyncAt) return;
+  if (remoteSyncInFlight) return remoteSyncInFlight;
+  remoteSyncInFlight = postJson("/api/v1/kiosk/remotes/sync/", {})
+    .then((data) => {
+      remoteSyncAttempts += 1;
+      remoteSyncComplete = data.missing === 0 && data.ambiguous === 0;
+      if (!remoteSyncComplete) {
+        const retryDelay = remoteSyncAttempts < 6 ? 10000 : 60000;
+        nextRemoteSyncAt = Date.now() + retryDelay;
+      }
+      return data;
+    })
+    .catch((error) => {
+      remoteSyncAttempts += 1;
+      const retryDelay = remoteSyncAttempts < 6 ? 10000 : 60000;
+      nextRemoteSyncAt = Date.now() + retryDelay;
+      // Discovery failure should not hide remotes that were already configured.
+      console.debug("Failed to sync remote IPs", error);
+    })
+    .finally(() => {
+      remoteSyncInFlight = null;
+    });
+  return remoteSyncInFlight;
+}
+
+async function syncAndLoadRemotes() {
+  await syncRemoteIps();
+  await loadRemotes();
+}
+
 function startRemotesRefresh() {
-  window.setInterval(() => {
-    if (!document.hidden && !state.remotePressing) loadRemotes();
+  window.setInterval(async () => {
+    if (document.hidden || state.remotePressing) return;
+    await syncRemoteIps();
+    await loadRemotes();
   }, 10000);
 }
 
@@ -355,4 +392,4 @@ function bindRemotesUi() {
 
 }
 
-export { loadRemotes, bindRemotesUi, renderRemotes, startRemotesRefresh };
+export { loadRemotes, syncAndLoadRemotes, bindRemotesUi, renderRemotes, startRemotesRefresh };

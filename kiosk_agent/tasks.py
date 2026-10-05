@@ -24,72 +24,93 @@ from .voice.events import voice_fallback
 logger = logging.getLogger(__name__)
 
 
+def sync_remote_ips() -> dict[str, int]:
+    """Discover controllers and synchronously refresh every configured remote."""
+    devices = discover_identity_devices()
+    devices_by_name = {}
+    for device in devices:
+        key = device["name"].strip().casefold()
+        devices_by_name.setdefault(key, []).append(device)
+
+    updated = 0
+    updated_buttons = 0
+    missing = 0
+    ambiguous = 0
+    incompatible = 0
+    now = timezone.now()
+
+    with transaction.atomic():
+        remotes = RemoteControl.objects.select_for_update().exclude(device_name="")
+        for remote in remotes:
+            matches = devices_by_name.get(remote.device_name.strip().casefold(), [])
+            if not matches:
+                missing += 1
+                continue
+            if len(matches) > 1:
+                ambiguous += 1
+                continue
+
+            device = matches[0]
+            if (
+                remote.device_type == RemoteControl.DeviceType.AC
+                and "ac_control" not in device.get("capabilities", [])
+            ):
+                incompatible += 1
+                if remote.device_ip or remote.device_last_seen_at:
+                    remote.device_ip = None
+                    remote.device_last_seen_at = None
+                    remote.save(
+                        update_fields=(
+                            "device_ip",
+                            "device_last_seen_at",
+                            "updated_at",
+                        )
+                    )
+                continue
+
+            remote.device_ip = device["ip"]
+            remote.device_last_seen_at = now
+            remote.save(
+                update_fields=("device_ip", "device_last_seen_at", "updated_at")
+            )
+            updated_buttons += remote.buttons.update(
+                command_url=f"http://{remote.device_ip}/ir"
+            )
+            updated += 1
+
+    logger.info(
+        "Remote IP sync complete: updated=%s buttons=%s missing=%s ambiguous=%s incompatible=%s",
+        updated,
+        updated_buttons,
+        missing,
+        ambiguous,
+        incompatible,
+    )
+    return {
+        "updated": updated,
+        "updated_buttons": updated_buttons,
+        "missing": missing,
+        "ambiguous": ambiguous,
+        "incompatible": incompatible,
+    }
+
+
 @shared_task(name="kiosk_agent.sync_remote_ips")
 def sync_remote_ips_task() -> dict[str, int]:
-    """Discover ESP32 controllers and refresh IPs for configured remotes."""
+    """Run the bulk IP sync in a worker for non-interactive callers."""
     close_old_connections()
     try:
         try:
-            devices = discover_identity_devices()
+            return sync_remote_ips()
         except DeviceDiscoveryError as exc:
             logger.warning("Remote IP sync could not discover devices: %s", exc)
-            return {"updated": 0, "missing": 0, "ambiguous": 0}
-
-        devices_by_name = {}
-        for device in devices:
-            key = device["name"].strip().casefold()
-            devices_by_name.setdefault(key, []).append(device)
-
-        updated = 0
-        missing = 0
-        ambiguous = 0
-        incompatible = 0
-        now = timezone.now()
-
-        with transaction.atomic():
-            remotes = RemoteControl.objects.select_for_update().exclude(device_name="")
-            for remote in remotes:
-                matches = devices_by_name.get(remote.device_name.strip().casefold(), [])
-                if not matches:
-                    missing += 1
-                    continue
-                if len(matches) > 1:
-                    ambiguous += 1
-                    continue
-
-                device = matches[0]
-                if (
-                    remote.device_type == RemoteControl.DeviceType.AC
-                    and "ac_control" not in device.get("capabilities", [])
-                ):
-                    incompatible += 1
-                    if remote.device_ip or remote.device_last_seen_at:
-                        remote.device_ip = None
-                        remote.device_last_seen_at = None
-                        remote.save(
-                            update_fields=(
-                                "device_ip",
-                                "device_last_seen_at",
-                                "updated_at",
-                            )
-                        )
-                    continue
-
-                remote.device_ip = device["ip"]
-                remote.device_last_seen_at = now
-                remote.save(
-                    update_fields=("device_ip", "device_last_seen_at", "updated_at")
-                )
-                updated += 1
-
-        logger.info(
-            "Remote IP sync complete: updated=%s missing=%s ambiguous=%s incompatible=%s",
-            updated,
-            missing,
-            ambiguous,
-            incompatible,
-        )
-        return {"updated": updated, "missing": missing, "ambiguous": ambiguous}
+            return {
+                "updated": 0,
+                "updated_buttons": 0,
+                "missing": 0,
+                "ambiguous": 0,
+                "incompatible": 0,
+            }
     finally:
         close_old_connections()
 

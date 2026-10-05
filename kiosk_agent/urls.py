@@ -11,6 +11,7 @@ from .views import (
     RealtimeToolView,
     RemoteButtonPressView,
     RemotesListView,
+    RemotesSyncView,
     ResetView,
     StatusView,
 )
@@ -29,6 +30,7 @@ urlpatterns = [
     path("realtime/messages/", RealtimeMessageView.as_view(), name="realtime-message"),
     path("realtime/tools/", RealtimeToolView.as_view(), name="realtime-tool"),
     path("remotes/", RemotesListView.as_view(), name="remotes"),
+    path("remotes/sync/", RemotesSyncView.as_view(), name="remotes-sync"),
     path("devices/<int:device_id>/ac-state/", ACStateView.as_view(), name="ac-state"),
     path(
         "remote-buttons/<int:button_id>/press/",

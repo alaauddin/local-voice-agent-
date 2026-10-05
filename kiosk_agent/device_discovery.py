@@ -70,18 +70,26 @@ def _local_scan_network() -> tuple[
     if not addresses:
         raise DeviceDiscoveryError("No usable local IPv4 interface was found.")
 
-    if default:
-        default_interface = default[1]
-        for network, ip, interface in addresses:
-            if interface == default_interface:
-                return network, ip, interface
-
     physical = [
         item
         for item in addresses
         if item[2].startswith(("wl", "en", "eth"))
     ]
-    return (physical or addresses)[0]
+    if default:
+        default_interface = default[1]
+        # Docker/VPN interfaces can temporarily become the default while
+        # Wi-Fi reconnects, but they cannot see controllers on the LAN.
+        for network, ip, interface in physical:
+            if interface == default_interface:
+                return network, ip, interface
+    if physical:
+        return physical[0]
+    if default:
+        default_interface = default[1]
+        for network, ip, interface in addresses:
+            if interface == default_interface:
+                return network, ip, interface
+    return addresses[0]
 
 
 def _probe_identity(ip: str, timeout: float) -> dict | None:

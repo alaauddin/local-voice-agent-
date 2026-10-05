@@ -8,8 +8,8 @@ import {
   populatePreferredMic, unlockAudio, preferredMicKey,
 } from "./js/audio-core.js";
 import {
-  loadRemotes, bindRemotesUi, startRemotesRefresh,
-} from "./js/remotes.js?v=dashboard-layout-3";
+  syncAndLoadRemotes, bindRemotesUi, startRemotesRefresh,
+} from "./js/remotes.js?v=remote-sync-2";
 import {
   setAvatar, preloadAvatarVideos, setMessagesOpen, updateControls, setBusy,
   cancelAutoStart, scheduleAutoRealtime, setConnection, loadMemory,
@@ -129,6 +129,6 @@ setAvatar("idle", true);
 preloadAvatarVideos();
 configureRecognition();
 loadMemory();
-loadRemotes();
+syncAndLoadRemotes();
 startRemotesRefresh();
 connect();

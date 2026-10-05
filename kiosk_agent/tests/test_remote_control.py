@@ -98,6 +98,33 @@ class RemoteControlTests(TestCase):
         self.assertNotIn("8980", str(payload))
         self.assertIsNone(payload["remotes"][0].get("device_ip"))
 
+    @patch("kiosk_agent.tasks.discover_identity_devices")
+    def test_chat_remote_sync_updates_ip_and_button_url_before_loading(self, discover):
+        self.remote.device_name = "Pool ESP32"
+        self.remote.device_ip = "192.168.1.50"
+        self.remote.save(update_fields=["device_name", "device_ip"])
+        discover.return_value = [
+            {
+                "name": "Pool ESP32",
+                "ip": "192.168.1.77",
+                "capabilities": ["ir_send"],
+            }
+        ]
+
+        response = self.client.post(
+            reverse("kiosk_agent:remotes-sync"),
+            {},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["updated"], 1)
+        self.assertEqual(response.json()["updated_buttons"], 1)
+        self.remote.refresh_from_db()
+        self.button.refresh_from_db()
+        self.assertEqual(str(self.remote.device_ip), "192.168.1.77")
+        self.assertEqual(self.button.command_url, "http://192.168.1.77/ir")
+
     @patch("kiosk_agent.remote_control.httpx.Client")
     def test_kiosk_press_posts_stored_command_from_backend(self, client_cls):
         controller_response = type("Resp", (), {})()

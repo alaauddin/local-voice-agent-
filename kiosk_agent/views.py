@@ -68,7 +68,7 @@ from .serializers import (
     RemoteControlPublicSerializer,
 )
 from .services import AgentBusyError, enqueue_message
-from .tasks import sync_remote_ips_task
+from .tasks import sync_remote_ips
 
 logger = logging.getLogger(__name__)
 
@@ -510,10 +510,6 @@ class KioskPageView(TemplateView):
         has_cookie = valid_kiosk_cookie(request.COOKIES.get(KIOSK_COOKIE_NAME, ""))
         if expected and not has_cookie and not secrets.compare_digest(supplied, expected):
             return HttpResponseForbidden("Kiosk access is not provisioned.")
-        try:
-            sync_remote_ips_task.delay()
-        except Exception:
-            logger.exception("Could not enqueue remote IP sync after kiosk page load.")
         response = super().get(request, *args, **kwargs)
         response.set_cookie(
             KIOSK_COOKIE_NAME,
@@ -910,6 +906,21 @@ class RemotesListView(APIView):
                 continue
             payload.append(RemoteControlPublicSerializer(remote).data)
         return Response({"remotes": payload})
+
+
+class RemotesSyncView(APIView):
+    authentication_classes = []
+    permission_classes = (OptionalKioskKeyPermission,)
+
+    def post(self, request):
+        try:
+            result = sync_remote_ips()
+        except DeviceDiscoveryError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"success": True, **result})
 
 
 class RemoteButtonPressView(APIView):
