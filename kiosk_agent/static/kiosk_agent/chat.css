@@ -792,7 +792,8 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 .header-property strong { color: var(--forest); font-size: 11px; }
 
 .app-header .voice-settings-button,
-.app-header .messages-toggle {
+.app-header .messages-toggle,
+.app-header .reload-button {
   position: relative;
   inset: auto;
   width: 40px;
@@ -800,6 +801,19 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
   flex: 0 0 40px;
   background: rgba(255,255,255,.72);
   border-radius: 13px;
+}
+
+.app-header .reload-button {
+  display: grid;
+  place-items: center;
+  color: var(--forest);
+  border: 1px solid rgba(77,133,128,.18);
+}
+
+.app-header .reload-button:hover { color: var(--gold); border-color: rgba(223,135,53,.35); }
+.app-header .reload-button svg {
+  width: 18px; fill: none; stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round;
 }
 
 .app-header .connection-pill {
@@ -1176,7 +1190,8 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
   .app-header .connection-pill > span:last-child { display: none; }
   .app-header .connection-dot { width: 9px; height: 9px; }
   .app-header .voice-settings-button,
-  .app-header .messages-toggle { top: auto; left: auto; width: 38px; height: 38px; flex-basis: 38px; }
+  .app-header .messages-toggle,
+  .app-header .reload-button { top: auto; left: auto; width: 38px; height: 38px; flex-basis: 38px; }
   .app-header .reset-button { width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
   .app-header .reset-button span { display: none; }
 

@@ -39,7 +39,9 @@ class VoiceController {
       at: Date.now(), generation: this.generation, previous, phase, ...detail,
     });
     if (this.diagnostics.length > 80) this.diagnostics.shift();
-    console.debug("[Voice] state", { previous, phase, generation: this.generation, ...detail });
+    if (window.WAZEN_VOICE_DEBUG === true) {
+      console.debug("[Voice] state", { previous, phase, generation: this.generation, ...detail });
+    }
   }
 
   beginSession(detail = {}) {

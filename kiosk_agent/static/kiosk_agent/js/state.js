@@ -6,6 +6,7 @@ const state = {
   socket: null, connected: false, busy: false, persona: "غروب", streams: new Map(),
   reconnectAttempts: 0, shouldReconnect: true, recognition: null, recognitionMode: null,
   recognizing: false, wakeArmed: false, conversationActive: false,
+  recognitionStartedAt: 0, recognitionRestartAttempts: 0,
   pendingCommand: false, finalHandled: false,
   activeNonce: null, audioBuffer: new Map(), nextSeq: 0, totalSeq: 0,
   audioPlaying: false, activeAudio: null, audioUnlocked: false,

@@ -19,6 +19,7 @@ export function configureRecognition() {
   state.recognition.lang = "ar-SA";
   state.recognition.onstart = () => {
     state.recognizing = true;
+    state.recognitionStartedAt = performance.now();
     voiceController.transition(VoicePhase.LISTENING);
     if (state.recognitionMode === "wake") {
       setAvatar("idle");
@@ -45,6 +46,7 @@ export function recognitionResult(event) {
     else interim += transcript;
   }
   const heard = `${finalText} ${interim}`.trim();
+  if (heard) state.recognitionRestartAttempts = 0;
   el.interim.textContent = heard;
   if (
     state.recognitionMode === "wake"
@@ -102,11 +104,18 @@ export function recognitionEnded() {
   state.recognizing = false;
   state.recognitionMode = null;
   updateControls();
+  const sessionDuration = performance.now() - state.recognitionStartedAt;
+  if (endedMode === "wake" && sessionDuration < 5000) {
+    state.recognitionRestartAttempts += 1;
+  } else {
+    state.recognitionRestartAttempts = 0;
+  }
+  const wakeRestartDelay = Math.min(750 * (2 ** state.recognitionRestartAttempts), 10000);
   if (state.pendingCommand) {
     state.pendingCommand = false;
     voiceController.schedule("recognition-restart", () => startRecognition("command"), 180);
-  } else if (endedMode === "wake" && state.wakeArmed && !state.conversationActive && !state.busy) {
-    scheduleWakeListener(400);
+  } else if (!document.hidden && endedMode === "wake" && state.wakeArmed && !state.conversationActive && !state.busy) {
+    scheduleWakeListener(wakeRestartDelay);
   } else if (!realtimeEnabled && endedMode === "command" && !state.finalHandled && state.conversationActive && !state.busy) {
     voiceController.schedule("recognition-restart", () => startRecognition("command"), 400);
   }
@@ -114,7 +123,7 @@ export function recognitionEnded() {
 
 export function startRecognition(mode) {
   if (realtimeEnabled && (state.realtimeReady || state.rtcPeer)) return;
-  if (!state.recognition || state.recognizing || state.busy || !state.connected) return;
+  if (document.hidden || !state.recognition || state.recognizing || state.busy || !state.connected) return;
   state.recognitionMode = mode;
   state.finalHandled = false;
   state.recognition.continuous = mode === "wake";
@@ -128,9 +137,11 @@ export function stopRecognition() {
 
 export function scheduleWakeListener(delay = 250) {
   if (realtimeEnabled && (state.realtimeReady || state.rtcPeer)) return;
-  if (!state.wakeArmed || state.conversationActive || state.busy || state.recognizing || !state.connected) return;
+  if (document.hidden || !state.wakeArmed || state.conversationActive || state.busy || state.recognizing || !state.connected) return;
   voiceController.schedule("wake-listener", () => {
-    if (state.wakeArmed && !state.conversationActive && !state.busy && !state.recognizing) startRecognition("wake");
+    if (!document.hidden && state.wakeArmed && !state.conversationActive && !state.busy && !state.recognizing) {
+      startRecognition("wake");
+    }
   }, delay);
 }
 

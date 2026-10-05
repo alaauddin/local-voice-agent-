@@ -57,7 +57,7 @@ export function updateControls() {
   el.mic.disabled = !state.connected
     || (!realtimeEnabled && state.busy)
     || (!realtimeEnabled && !state.recognition);
-  el.mic.classList.toggle("wake-armed", state.wakeArmed && state.recognitionMode === "wake");
+  el.mic.classList.toggle("wake-armed", state.wakeArmed && !state.conversationActive);
   el.mic.classList.toggle("listening", state.recognitionMode === "command" && state.recognizing);
   el.mic.classList.toggle("conversation-active", state.conversationActive);
 }

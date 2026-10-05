@@ -49,6 +49,7 @@ el.closeMessages.addEventListener("click", () => setMessagesOpen(false));
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && state.messagesOpen) setMessagesOpen(false);
 });
+el.reload?.addEventListener("click", () => window.location.reload());
 el.reset.addEventListener("click", () => el.resetDialog.showModal());
 el.cancelReset.addEventListener("click", () => el.resetDialog.close());
 el.confirmReset.addEventListener("click", resetStay);
