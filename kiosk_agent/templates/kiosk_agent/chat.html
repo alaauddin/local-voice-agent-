@@ -8,13 +8,11 @@
   <meta name="voice-wake-word" content="{{ voice_wake_word }}">
   <meta name="voice-source" content="{{ voice_source }}">
   <meta name="voice-activation-mode" content="{{ voice_activation_mode }}">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; media-src 'self' blob: data:; connect-src 'self' wss: https://api.openai.com; img-src 'self' data: blob:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; media-src 'self' blob: data:; connect-src 'self' wss: https://api.openai.com; img-src 'self' data: blob:">
   <link rel="manifest" href="{% static 'kiosk_agent/manifest.json' %}">
   <link rel="icon" href="{% static 'kiosk_agent/videos/poster.svg' %}" type="image/svg+xml">
   <title>غروب | المساعد الذكي للشاليهات</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'kiosk_agent/fonts.css' %}">
   <link rel="stylesheet" href="{% static 'kiosk_agent/chat.css' %}?v=dashboard-reference-2">
   <link rel="stylesheet" href="{% static 'kiosk_agent/dashboard.css' %}?v=dashboard-layout-3">
 </head>

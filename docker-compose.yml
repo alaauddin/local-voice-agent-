@@ -78,6 +78,11 @@ services:
 
   worker:
     <<: *app
+    network_mode: host
+    environment:
+      REDIS_URL: redis://127.0.0.1:16380/0
+      SQLITE_PATH: /app/data/db.sqlite3
+      PYTHONOPTIMIZE: "1"
     command: ["celery", "-A", "wazen_local", "worker", "--loglevel=INFO", "--concurrency=1", "--pool=solo", "--without-heartbeat", "--without-gossip", "--without-mingle"]
     cpus: 0.25
     mem_limit: 200m
@@ -88,6 +93,17 @@ services:
       web:
         condition: service_healthy
     stop_grace_period: 20s
+
+  scheduler:
+    <<: *app
+    command: ["celery", "-A", "wazen_local", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    cpus: 0.1
+    mem_limit: 128m
+    mem_reservation: 64m
+    depends_on:
+      redis:
+        condition: service_healthy
+    stop_grace_period: 10s
 
 volumes:
   redis_data:

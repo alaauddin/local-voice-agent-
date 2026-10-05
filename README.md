@@ -62,6 +62,10 @@ The text and Realtime agents can control remotes that an administrator has expli
 locations, available button IDs, AC state, and AC capabilities. Controller URLs, IP addresses, and
 raw IR timings are never sent to the model.
 
+Celery Beat refreshes configured remote-control IP addresses by `DEVICE_NAME` every 60 seconds.
+Set `REMOTE_IP_SYNC_INTERVAL_SECONDS` to change the interval (minimum 10 seconds). The worker uses
+host networking so LAN device discovery sees the same network as the admin sync action.
+
 RAW remotes execute only commands already stored in Django. Buttons marked
 `requires_confirmation` use a signed, two-turn confirmation token: the initial tool call cannot
 transmit, and the token cannot be used until a later guest turn. AC requests send only the fields
