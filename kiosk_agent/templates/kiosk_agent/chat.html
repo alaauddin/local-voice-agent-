@@ -35,6 +35,13 @@
           <a href="#suggestions"><span data-dashboard-icon="light"></span>الخدمات</a>
         </nav>
         <div class="header-status">
+          <div class="zoom-controls" role="group" aria-label="تكبير وتصغير الصفحة">
+            <button id="zoomOutButton" type="button" aria-label="تصغير الصفحة" title="تصغير الصفحة">−</button>
+            <button id="zoomResetButton" type="button" aria-label="إعادة التكبير إلى الحجم الطبيعي" title="الحجم الطبيعي">
+              <span id="zoomValue">100%</span>
+            </button>
+            <button id="zoomInButton" type="button" aria-label="تكبير الصفحة" title="تكبير الصفحة">+</button>
+          </div>
           <button class="voice-settings-button" id="voiceSettingsButton" type="button" aria-label="إعدادات الصوت" title="إعدادات الصوت">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
           </button>
@@ -200,6 +207,6 @@
     <div id="remotePopupContent" class="remote-popup-content"></div>
   </dialog>
 
-  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=remote-sync-2"></script>
+  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=page-zoom-1"></script>
 </body>
 </html>

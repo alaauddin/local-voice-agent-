@@ -1,6 +1,6 @@
 "use strict";
 
-import { $, el } from "./js/dom.js";
+import { $, el } from "./js/dom.js?v=page-zoom-2";
 import { state, fallback } from "./js/state.js";
 import { realtimeEnabled } from "./js/config.js";
 import { voiceController } from "./js/voice-controller.js";
@@ -30,6 +30,49 @@ voiceController.configure({
 });
 
 bindRemotesUi();
+
+const zoomLevels = [80, 90, 100, 110, 120, 130, 140];
+const zoomStorageKey = "chatPageZoom";
+
+function nearestZoom(value) {
+  return zoomLevels.reduce((nearest, level) => (
+    Math.abs(level - value) < Math.abs(nearest - value) ? level : nearest
+  ));
+}
+
+function applyZoom(value) {
+  const zoom = nearestZoom(Number(value) || 100);
+  document.body.style.zoom = `${zoom}%`;
+  el.zoomValue.textContent = `${zoom}%`;
+  el.zoomOut.disabled = zoom === zoomLevels[0];
+  el.zoomIn.disabled = zoom === zoomLevels.at(-1);
+  localStorage.setItem(zoomStorageKey, String(zoom));
+  return zoom;
+}
+
+let pageZoom = applyZoom(localStorage.getItem(zoomStorageKey));
+function changeZoom(direction) {
+  const currentIndex = zoomLevels.indexOf(pageZoom);
+  const nextIndex = Math.max(0, Math.min(zoomLevels.length - 1, currentIndex + direction));
+  pageZoom = applyZoom(zoomLevels[nextIndex]);
+}
+
+el.zoomOut.addEventListener("click", () => changeZoom(-1));
+el.zoomIn.addEventListener("click", () => changeZoom(1));
+el.zoomReset.addEventListener("click", () => { pageZoom = applyZoom(100); });
+document.addEventListener("keydown", (event) => {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  if (["+", "="].includes(event.key)) {
+    event.preventDefault();
+    changeZoom(1);
+  } else if (event.key === "-") {
+    event.preventDefault();
+    changeZoom(-1);
+  } else if (event.key === "0") {
+    event.preventDefault();
+    pageZoom = applyZoom(100);
+  }
+});
 
 
 el.form.addEventListener("submit", (event) => { event.preventDefault(); submitMessage(el.input.value); });

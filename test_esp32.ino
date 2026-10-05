@@ -35,11 +35,11 @@
 
 
 
-const char* WIFI_SSID = "BARQ NET(325)";
+const char* WIFI_SSID = "OnePlus 8 TMO-672b";
 // Use an empty string for an open Wi-Fi network: ""
-const char* WIFI_PASSWORD = "";
+const char* WIFI_PASSWORD = "alauddin@123";
 
-const char* DEVICE_NAME = "ESP32 IR Controller";
+const char* DEVICE_NAME = "Right ESP32 IR Controller";
 const char* DEVICE_TYPE = "esp32";
 const char* DEVICE_HOSTNAME = "esp32-ir-controller";
 const char* DEVICE_MANUFACTURER = "Espressif";
@@ -53,7 +53,7 @@ const char* IDENTITY_PROTOCOL = "wazen-device-identity/1";
 
 const uint8_t IR_RECEIVE_PIN = 25;
 
-const uint8_t IR_SEND_PINS[] = {18, 32, 27};
+const uint8_t IR_SEND_PINS[] = {18, 23, 15};
 
 const size_t IR_SEND_PIN_COUNT =
 
@@ -80,7 +80,11 @@ const uint32_t CAPTURE_TIMEOUT_MS = 15000;
 
 const uint32_t WIFI_CONNECT_TIMEOUT_MS = 20000;
 
-const uint32_t WIFI_RETRY_INTERVAL_MS = 10000;
+const uint32_t WIFI_INITIAL_RETRY_INTERVAL_MS = 10000;
+
+const uint32_t WIFI_MAX_RETRY_INTERVAL_MS = 60000;
+
+const uint32_t WIFI_RADIO_RESET_DELAY_MS = 300;
 
 
 
@@ -121,10 +125,19 @@ bool captureEnabled = false;
 
 unsigned long captureStartedAt = 0;
 
-unsigned long lastReconnectAttempt = 0;
 uint32_t signalRevision = 0;
 uint32_t captureBaselineRevision = 0;
-bool wifiScanLogged = false;
+enum WiFiConnectionState {
+  WIFI_OFFLINE,
+  WIFI_RESETTING_RADIO,
+  WIFI_CONNECTING
+};
+
+WiFiConnectionState wifiConnectionState = WIFI_OFFLINE;
+unsigned long wifiStateChangedAt = 0;
+unsigned long nextWiFiAttemptAt = 0;
+uint32_t wifiRetryIntervalMs = WIFI_INITIAL_RETRY_INTERVAL_MS;
+
 
 wl_status_t lastWiFiStatus = WL_NO_SHIELD;
 
@@ -2810,295 +2823,135 @@ void onWiFiEvent(
 
 
 
-void startWiFiAttempt() {
+void scheduleNextWiFiAttempt(unsigned long now) {
 
-  // Fully stop the station before applying a new configuration. A plain
-  // disconnect is asynchronous and calling begin() 100 ms later can produce:
-  // "wifi:sta is connecting, cannot set config".
+  wifiConnectionState = WIFI_OFFLINE;
+  nextWiFiAttemptAt = now + wifiRetryIntervalMs;
 
-  WiFi.disconnect(true, false);
+  Serial.print("Next WiFi attempt in ");
+  Serial.print(wifiRetryIntervalMs / 1000);
+  Serial.println(" seconds.");
 
-  delay(300);
+  if (wifiRetryIntervalMs < WIFI_MAX_RETRY_INTERVAL_MS) {
+    wifiRetryIntervalMs *= 2;
 
-  WiFi.mode(WIFI_STA);
-
-  WiFi.setHostname(DEVICE_HOSTNAME);
-
-  WiFi.setSleep(false);
-
-  // Manual retries below are deterministic; automatic retries can overlap
-  // with scans and configuration changes.
-  WiFi.setAutoReconnect(false);
-
-  if (!wifiScanLogged) {
-
-    wifiScanLogged = true;
-
-    Serial.println("Scanning visible 2.4 GHz WiFi networks once...");
-
-    const int networkCount = WiFi.scanNetworks(false, true);
-
-    int bestNetwork = -1;
-
-    int32_t bestRssi = -1000;
-
-    for (int i = 0; i < networkCount; i++) {
-
-      const String scannedSsid = WiFi.SSID(i);
-
-      Serial.print("  [");
-
-      Serial.print(scannedSsid);
-
-      Serial.print("] channel=");
-
-      Serial.print(WiFi.channel(i));
-
-      Serial.print(" RSSI=");
-
-      Serial.print(WiFi.RSSI(i));
-
-      Serial.print(" dBm auth=");
-
-      Serial.print((int)WiFi.encryptionType(i));
-
-      Serial.print(" BSSID=");
-
-      Serial.println(WiFi.BSSIDstr(i));
-
-      if (
-        scannedSsid == WIFI_SSID &&
-        WiFi.RSSI(i) > bestRssi
-      ) {
-
-        bestNetwork = i;
-
-        bestRssi = WiFi.RSSI(i);
-
-      }
-
+    if (wifiRetryIntervalMs > WIFI_MAX_RETRY_INTERVAL_MS) {
+      wifiRetryIntervalMs = WIFI_MAX_RETRY_INTERVAL_MS;
     }
-
-    if (bestNetwork < 0) {
-
-      Serial.print("Target SSID not visible in scan: [");
-
-      Serial.print(WIFI_SSID);
-
-      Serial.println("]");
-
-      Serial.println(
-        "A direct connection will still be attempted in case the SSID is hidden."
-      );
-
-    } else {
-
-      Serial.print("Target found on channel ");
-
-      Serial.print(WiFi.channel(bestNetwork));
-
-      Serial.print(" with RSSI ");
-
-      Serial.print(bestRssi);
-
-      Serial.print(" dBm and authentication mode ");
-
-      Serial.println((int)WiFi.encryptionType(bestNetwork));
-
-      Serial.println("Authentication mode 0 means an open network.");
-
-    }
-
-    WiFi.scanDelete();
-
-    delay(50);
-
   }
-
-
-
-  if (strlen(WIFI_PASSWORD) == 0) {
-
-    Serial.println("Connecting without a WiFi password (open network)");
-
-    WiFi.begin(WIFI_SSID, nullptr);
-
-  } else {
-
-    WiFi.begin(
-
-      WIFI_SSID,
-
-      WIFI_PASSWORD
-
-    );
-
-  }
-
-
-
-  lastReconnectAttempt = millis();
-
 }
 
 
+
+void startWiFiAttempt() {
+
+  // Radio shutdown is asynchronous. serviceWiFi() waits before calling begin()
+  // so the rest of the device remains responsive during the reset.
+  Serial.println("Preparing WiFi connection attempt...");
+  WiFi.disconnect(true, false);
+  wifiConnectionState = WIFI_RESETTING_RADIO;
+  wifiStateChangedAt = millis();
+}
+
+
+
+void beginWiFiAssociation(unsigned long now) {
+
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(DEVICE_HOSTNAME);
+  WiFi.setSleep(false);
+  WiFi.setAutoReconnect(false);
+
+  Serial.print("Connecting to WiFi SSID: ");
+  Serial.println(WIFI_SSID);
+
+  if (strlen(WIFI_PASSWORD) == 0) {
+    WiFi.begin(WIFI_SSID, nullptr);
+  } else {
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  }
+
+  wifiConnectionState = WIFI_CONNECTING;
+  wifiStateChangedAt = now;
+}
 
 
 
 void connectWiFi() {
 
   WiFi.persistent(false);
-
   WiFi.mode(WIFI_STA);
-
-
-
   WiFi.setHostname(DEVICE_HOSTNAME);
-
   WiFi.setSleep(false);
-
   WiFi.setAutoReconnect(false);
-
   WiFi.onEvent(onWiFiEvent);
 
-
-
-  Serial.print("Connecting to WiFi SSID: ");
-
-  Serial.println(WIFI_SSID);
-
   Serial.print("ESP32 WiFi MAC: ");
-
   Serial.println(WiFi.macAddress());
-
   Serial.println("For a MikroTik HotSpot, authorize or bypass this MAC address.");
 
-
+  // Start asynchronously; setup and the local IR controller do not wait for
+  // the router to become available.
   startWiFiAttempt();
-
-
-
-  unsigned long startedAt =
-
-    millis();
-
-
-
-  while (
-
-    WiFi.status() != WL_CONNECTED &&
-
-    millis() - startedAt < WIFI_CONNECT_TIMEOUT_MS
-
-  ) {
-
-    delay(500);
-
-    Serial.print(".");
-
-  }
-
-
-
-  Serial.println();
-
-
-
-  wl_status_t status =
-
-    WiFi.status();
-
-
-
-  lastWiFiStatus = status;
-
-
-
-  if (status == WL_CONNECTED) {
-
-    Serial.print("WiFi connected. Open: http://");
-
-    Serial.println(WiFi.localIP());
-
-  } else {
-
-    Serial.print("Initial WiFi connection timed out: ");
-
-    Serial.println(wifiStatusName(status));
-
-    Serial.println("Web server will start and WiFi will retry every 10 seconds.");
-
-  }
-
 }
-
-
 
 
 
 void serviceWiFi() {
 
-  wl_status_t currentStatus =
+  const unsigned long now = millis();
+  const wl_status_t currentStatus = WiFi.status();
 
-    WiFi.status();
-
-
-
-  if (currentStatus != lastWiFiStatus) {
-
-    lastWiFiStatus = currentStatus;
-
-
-
-    if (currentStatus == WL_CONNECTED) {
-
+  if (currentStatus == WL_CONNECTED) {
+    if (lastWiFiStatus != WL_CONNECTED) {
       Serial.print("WiFi connected. Open: http://");
-
       Serial.println(WiFi.localIP());
-
       Serial.print("Gateway: ");
-
       Serial.println(WiFi.gatewayIP());
-
       Serial.println(
         "WiFi association is ready. MikroTik HotSpot authentication may still block Internet access."
       );
-
-    } else {
-
-      Serial.print("WiFi status: ");
-
-      Serial.print(wifiStatusName(currentStatus));
-
-      Serial.print(" (");
-
-      Serial.print((int)currentStatus);
-
-      Serial.println(")");
-
     }
 
+    lastWiFiStatus = currentStatus;
+    wifiConnectionState = WIFI_OFFLINE;
+    nextWiFiAttemptAt = now;
+    wifiRetryIntervalMs = WIFI_INITIAL_RETRY_INTERVAL_MS;
+    return;
   }
 
+  if (currentStatus != lastWiFiStatus) {
+    lastWiFiStatus = currentStatus;
+    Serial.print("WiFi status: ");
+    Serial.print(wifiStatusName(currentStatus));
+    Serial.print(" (");
+    Serial.print((int)currentStatus);
+    Serial.println(")");
+  }
 
+  if (wifiConnectionState == WIFI_RESETTING_RADIO) {
+    if (now - wifiStateChangedAt >= WIFI_RADIO_RESET_DELAY_MS) {
+      beginWiFiAssociation(now);
+    }
 
-  if (
+    return;
+  }
 
-    currentStatus != WL_CONNECTED &&
+  if (wifiConnectionState == WIFI_CONNECTING) {
+    if (now - wifiStateChangedAt >= WIFI_CONNECT_TIMEOUT_MS) {
+      Serial.print("WiFi connection timed out: ");
+      Serial.println(wifiStatusName(currentStatus));
+      WiFi.disconnect(true, false);
+      scheduleNextWiFiAttempt(now);
+    }
 
-    millis() - lastReconnectAttempt >= WIFI_RETRY_INTERVAL_MS
+    return;
+  }
 
-  ) {
-
-    Serial.println("Restarting WiFi connection...");
-
+  if (static_cast<int32_t>(now - nextWiFiAttemptAt) >= 0) {
     startWiFiAttempt();
-
   }
-
 }
-
-
 
 
 

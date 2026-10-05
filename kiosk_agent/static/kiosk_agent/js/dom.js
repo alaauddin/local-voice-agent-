@@ -8,6 +8,8 @@ const el = {
   form: $("#chatForm"), input: $("#messageInput"), send: $("#sendButton"), activity: $("#activity"),
   activityText: $("#activityText"), speakPrompt: $("#speakPrompt"), mic: $("#micButton"), voiceStatus: $("#voiceStatus"),
   interim: $("#interimTranscript"), avatar: $("#avatarStage"), reload: $("#reloadButton"), reset: $("#resetButton"),
+  zoomOut: $("#zoomOutButton"), zoomReset: $("#zoomResetButton"), zoomIn: $("#zoomInButton"),
+  zoomValue: $("#zoomValue"),
   resetDialog: $("#resetDialog"), cancelReset: $("#cancelReset"), confirmReset: $("#confirmReset"),
   settingsButton: $("#voiceSettingsButton"), settingsDialog: $("#voiceSettingsDialog"),
   closeSettings: $("#closeVoiceSettings"), fallbackEnabled: $("#fallbackEnabled"),

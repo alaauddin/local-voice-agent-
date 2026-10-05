@@ -776,6 +776,19 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 .header-brand { gap: 16px; }
 .header-status { gap: 9px; }
 
+.zoom-controls {
+  display: flex; align-items: center; direction: ltr; overflow: hidden;
+  background: rgba(255,255,255,.72); border: 1px solid rgba(77,133,128,.18); border-radius: 13px;
+}
+.zoom-controls button {
+  min-width: 34px; height: 38px; padding: 0 8px; color: var(--forest); background: transparent;
+  border: 0; font: 600 18px/1 Arial, sans-serif;
+}
+.zoom-controls button + button { border-left: 1px solid rgba(77,133,128,.14); }
+.zoom-controls button:hover:not(:disabled) { color: var(--gold); background: rgba(223,135,53,.08); }
+.zoom-controls button:disabled { opacity: .35; cursor: not-allowed; }
+.zoom-controls #zoomResetButton { min-width: 52px; font-size: 10px; }
+
 .app-header .sunset-wordmark {
   font-size: clamp(27px, 2.4vw, 36px);
   letter-spacing: -2px;
@@ -1186,6 +1199,8 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
   }
   .header-property { display: none; }
   .header-status { gap: 6px; }
+  .zoom-controls button { min-width: 32px; height: 36px; padding: 0 6px; }
+  .zoom-controls #zoomResetButton { display: none; }
   .app-header .connection-pill { width: 10px; height: 10px; margin: 0 2px; padding: 0; border: 0; background: transparent; }
   .app-header .connection-pill > span:last-child { display: none; }
   .app-header .connection-dot { width: 9px; height: 9px; }
