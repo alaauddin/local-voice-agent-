@@ -17,6 +17,24 @@ export function sendRealtime(event) {
   return true;
 }
 
+function setMicrophoneEnabled(enabled, reason = "") {
+  const tracks = state.rtcStream?.getAudioTracks?.() || [];
+  const changed = tracks.some((track) => track.enabled !== enabled);
+  if (!changed) return;
+  tracks.forEach((track) => { track.enabled = enabled; });
+  if (window.WAZEN_VOICE_DEBUG === true) {
+    console.debug(`[Mic] ${enabled ? "enabled" : "gated"}`, reason);
+  }
+}
+
+function restoreMicrophoneAfterPlayback() {
+  voiceController.schedule("microphone-restore", () => {
+    if (!state.outputAudioActive && state.realtimeReady && state.rtcStream) {
+      setMicrophoneEnabled(true, "assistant playback ended");
+    }
+  }, 350, state.realtimeGeneration);
+}
+
 export function noteFirstAudioLatency() {
   if (!state.turnStoppedAt) return;
   console.debug(
@@ -134,6 +152,8 @@ export async function handleRealtimeEvent(event) {
     case "output_audio_buffer.started":
       voiceController.transition(VoicePhase.SPEAKING);
       console.debug("[Realtime] output_audio_buffer.started");
+      voiceController.cancelTimer("microphone-restore");
+      setMicrophoneEnabled(false, "assistant playback started");
       noteFirstAudioLatency();
       playback.muted = false;
       state.outputAudioActive = true;
@@ -144,6 +164,7 @@ export async function handleRealtimeEvent(event) {
     case "output_audio_buffer.stopped":
     case "output_audio_buffer.cleared":
       state.outputAudioActive = false;
+      restoreMicrophoneAfterPlayback();
       if (state.responseComplete) {
         setAvatar("idle");
         setSpeakPrompt(true);
@@ -153,6 +174,8 @@ export async function handleRealtimeEvent(event) {
     case "response.output_audio.delta":
     case "response.audio.delta":
       noteFirstAudioLatency();
+      voiceController.cancelTimer("microphone-restore");
+      setMicrophoneEnabled(false, "assistant audio received");
       playback.muted = false;
       setBusy(false);
       setAvatar("speaking");
@@ -440,6 +463,7 @@ export async function openRealtime(initialText = "", generation = state.realtime
     );
     state.realtimeReady = true;
     state.realtimeAbortController = null;
+    setMicrophoneEnabled(true, "realtime connected");
     voiceController.cancelTimer("realtime-connect-timeout");
     voiceController.transition(VoicePhase.LISTENING);
     state.realtimeRetryAttempts = 0;
