@@ -5,6 +5,9 @@ from django.views.generic import RedirectView
 from kiosk_agent.views import (
     InternalACStateSyncView,
     KioskPageView,
+    TVRemotePageView,
+    tv_remote_command_view,
+    tv_remote_status_view,
     button_capture_start_view,
     button_capture_status_view,
     button_config_ac_test_view,
@@ -18,6 +21,10 @@ from kiosk_agent.views import (
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="kiosk-chat", permanent=False)),
     path("chat/", KioskPageView.as_view(), name="kiosk-chat"),
+    path("tv-remote/", TVRemotePageView.as_view(), name="tv-remote"),
+    path("tv-remote/<int:remote_id>/", TVRemotePageView.as_view(), name="tv-remote-detail"),
+    path("api/tv-remote/command/", tv_remote_command_view, name="tv-remote-command"),
+    path("api/tv-remote/status/", tv_remote_status_view, name="tv-remote-status"),
     path("button-config/", button_config_view, name="button-config"),
     path("button-config/remotes/create/", remote_create_view, name="remote-create"),
     path(

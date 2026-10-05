@@ -168,18 +168,68 @@ function buildGeneric(remote, expanded) {
   }
   return body;
 }
+function lgButton(label, command, className = "") {
+  const button = element("button", `lg-tv-control ${className}`.trim(), label);
+  button.type = "button";
+  button.dataset.lgCommand = command;
+  return button;
+}
+function buildLGTV(remote, expanded) {
+  const body = element("div", "dashboard-generic lg-tv-remote");
+  body.dataset.deviceId = String(remote.id);
+  if (!expanded) {
+    const open = element("button", "dashboard-control lg-tv-open", "فتح الريموت");
+    open.type = "button";
+    open.dataset.openRemote = String(remote.id);
+    open.setAttribute("aria-label", `فتح ريموت ${remote.name}`);
+    open.prepend(icon("device"));
+    body.append(open);
+    return body;
+  }
+  body.classList.add("is-expanded");
+  const power = lgButton("⏻", "POWER", "lg-power");
+  const main = element("div", "lg-button-row");
+  main.append(lgButton("INPUT", "INPUT"), lgButton("HOME", "HOME"), lgButton("SETTINGS", "SETTINGS"));
+  const rockers = element("div", "lg-rockers");
+  const volume = element("div", "lg-rocker");
+  volume.append(lgButton("VOL +", "VOL_UP"), lgButton("VOL −", "VOL_DOWN"));
+  const channel = element("div", "lg-rocker");
+  channel.append(lgButton("CH +", "CH_UP"), lgButton("CH −", "CH_DOWN"));
+  rockers.append(volume, lgButton("MUTE", "MUTE", "lg-mute"), channel);
+  const dpad = element("div", "lg-dpad");
+  dpad.append(
+    lgButton("▲", "UP", "lg-up"),
+    lgButton("◀", "LEFT", "lg-left"),
+    lgButton("OK", "OK", "lg-ok"),
+    lgButton("▶", "RIGHT", "lg-right"),
+    lgButton("▼", "DOWN", "lg-down"),
+  );
+  const utility = element("div", "lg-button-row lg-utility");
+  utility.append(lgButton("BACK", "BACK"), lgButton("EXIT", "EXIT"));
+  const numbers = element("div", "lg-numbers");
+  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].forEach(number => {
+    numbers.append(lgButton(number, number, number === "0" ? "lg-zero" : ""));
+  });
+  body.append(power, main, rockers, dpad, utility, numbers);
+  return body;
+}
+
 export function buildRemoteCard(remote, expanded = false) {
   const kind = deviceKind(remote);
   const card = element("article", `remote-slide dashboard-device device-${kind}${expanded ? " is-expanded" : ""}`);
   card.dataset.remoteId = String(remote.id);
   card.dataset.deviceKind = kind;
+  if (remote.device_type === "lg_tv") card.classList.add("device-tv");
   const heading = element("header", "dashboard-device-heading");
   const deviceIcon = element("span", "dashboard-device-icon");
   deviceIcon.append(icon(kind));
   const copy = element("div", "dashboard-device-copy");
   copy.append(element("strong", "", remote.name), element("small", "", remote.location || "داخل الشاليه"));
   const status = element("span", "dashboard-device-status");
-  if (kind === "ac") {
+  if (remote.device_type === "lg_tv") {
+    status.textContent = "ريموت مخصص";
+    status.classList.add("is-on");
+  } else if (kind === "ac") {
     status.textContent = !remote.ac_state ? "غير متاح" : remote.ac_state.power ? "يعمل الآن" : "متوقف";
     status.classList.toggle("is-on", Boolean(remote.ac_state?.power));
   } else {
@@ -195,6 +245,6 @@ export function buildRemoteCard(remote, expanded = false) {
     more.setAttribute("aria-label", `فتح جهاز التحكم ${remote.name}`);
     heading.append(more);
   }
-  card.append(heading, kind === "ac" ? buildAC(remote) : buildGeneric(remote, expanded));
+  card.append(heading, remote.device_type === "lg_tv" ? buildLGTV(remote, expanded) : kind === "ac" ? buildAC(remote) : buildGeneric(remote, expanded));
   return card;
 }

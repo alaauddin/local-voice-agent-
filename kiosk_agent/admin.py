@@ -252,6 +252,7 @@ class RemoteControlAdminForm(forms.ModelForm):
             "location",
             "device_name",
             "device_ip",
+            "controller_url",
             "device_type",
             "protocol",
             "protocol_model",
@@ -266,9 +267,11 @@ class RemoteControlAdminForm(forms.ModelForm):
             "name": forms.TextInput(attrs={"placeholder": "e.g. Living Room AC"}),
             "location": forms.TextInput(attrs={"placeholder": "e.g. Living room"}),
             "device_name": forms.TextInput(attrs={"placeholder": "ESP32 IR Controller"}),
+            "controller_url": forms.URLInput(attrs={"placeholder": "http://192.168.1.50"}),
         }
         help_texts = {
             "device_type": "Choose Air conditioner for state-based Gree, Haier, Midea, or Hisense control. Choose Raw IR for TVs, fans, and learned remotes.",
+            "controller_url": "Server-only base URL for the dedicated LG TV IR controller.",
             "protocol": "Choose the IR protocol. Brand and model are selected automatically.",
             "protocol_model": "Choose the remote/model variant used by this protocol.",
             "guest_visible": "Show this remote to guests on the kiosk.",
@@ -282,6 +285,9 @@ class RemoteControlAdminForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        if cleaned_data.get("device_type") == RemoteControl.DeviceType.LG_TV and not cleaned_data.get("device_name"):
+            self.add_error("device_name", "Enter the LG TV controller DEVICE_NAME used for IP sync.")
+
         if cleaned_data.get("device_type") != RemoteControl.DeviceType.AC:
             cleaned_data["protocol"] = ""
             cleaned_data["protocol_model"] = ""
@@ -409,6 +415,7 @@ class RemoteControlAdmin(admin.ModelAdmin):
             "ESP32 controller",
             {
                 "fields": (
+                    "controller_url",
                     "device_name",
                     ("device_ip", "device_last_seen_at"),
                 ),
@@ -557,9 +564,26 @@ class RemoteControlAdmin(admin.ModelAdmin):
                         )
                     continue
 
+                if (
+                    remote.device_type == RemoteControl.DeviceType.LG_TV
+                    and "lg_tv_remote" not in device.get("capabilities", [])
+                ):
+                    firmware = device.get("firmware_version") or "unknown"
+                    incompatible.append(f"{remote.device_name} (firmware {firmware})")
+                    continue
+
                 remote.device_ip = device["ip"]
                 remote.device_last_seen_at = now
-                remote.save(update_fields=("device_ip", "device_last_seen_at", "updated_at"))
+                if remote.device_type == RemoteControl.DeviceType.LG_TV:
+                    remote.controller_url = f"http://{remote.device_ip}"
+                remote.save(
+                    update_fields=(
+                        "device_ip",
+                        "device_last_seen_at",
+                        "controller_url",
+                        "updated_at",
+                    )
+                )
                 synced += 1
 
         if synced:

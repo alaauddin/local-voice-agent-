@@ -297,6 +297,39 @@ async function updateACState(remote, node) {
   }
 }
 
+async function sendLGTVCommand(remote, node) {
+  if (!remote || !node.dataset.lgCommand) return;
+  node.classList.add("sending");
+  node.setAttribute("aria-busy", "true");
+  try {
+    const csrfToken = document.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
+    const response = await fetch("/api/tv-remote/command/", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken,
+      },
+      body: JSON.stringify({
+        remote_id: remote.id,
+        command: node.dataset.lgCommand,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.success !== true) {
+      throw new Error(data.error || "تعذر إرسال أمر التلفاز");
+    }
+    setRemoteFeedback("");
+  } catch (error) {
+    node.classList.add("error");
+    setRemoteFeedback(error.message || "تعذر الاتصال بريموت التلفاز", "error");
+    window.setTimeout(() => node.classList.remove("error"), 1400);
+  } finally {
+    node.classList.remove("sending");
+    node.removeAttribute("aria-busy");
+  }
+}
+
 function bindRemotesUi() {
   if (!el.remotesPanel) return;
   document.querySelector("#remoteFilters")?.addEventListener("click", event => {
@@ -361,6 +394,14 @@ function bindRemotesUi() {
       const controls = acNode.closest(".ac-controls");
       const remote = state.remotes.find((item) => item.id === Number(controls?.dataset.deviceId));
       updateACState(remote, acNode);
+      return;
+    }
+    const lgNode = event.target.closest(".lg-tv-control");
+    if (lgNode && container.contains(lgNode)) {
+      event.preventDefault();
+      const controls = lgNode.closest(".lg-tv-remote");
+      const remote = state.remotes.find((item) => item.id === Number(controls?.dataset.deviceId));
+      sendLGTVCommand(remote, lgNode);
       return;
     }
     const node = event.target.closest(".remote-button");

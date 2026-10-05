@@ -1,0 +1,68 @@
+:root { font-family: "Noto Kufi Arabic", system-ui, sans-serif; color: #123e45; background: #f4ede2; }
+* { box-sizing: border-box; }
+html, body { min-height: 100%; margin: 0; }
+body { min-height: 100vh; background: radial-gradient(circle at 15% 10%, #dceee6, transparent 32%), radial-gradient(circle at 85% 80%, #f3dcc0, transparent 30%), #f4ede2; }
+button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; }
+.tv-app-header { min-height: 68px; padding: 10px clamp(16px, 4vw, 52px); display: flex; align-items: center; justify-content: space-between; gap: 24px; background: #fcfaf6; border-radius: 0 0 20px 20px; box-shadow: 0 4px 18px #574c340b; }
+.tv-brand { display: flex; align-items: center; gap: 14px; color: inherit; text-decoration: none; }
+.sunset-wordmark { display: flex; align-items: baseline; color: #174c76; font: 800 30px/.9 Arial, sans-serif; letter-spacing: -3px; }
+.sunset-wordmark b { margin: 0 -2px; color: #df8735; font-size: 1.35em; text-shadow: 4px 0 #df873536; }
+.tv-brand > span:last-child { display: grid; gap: 2px; }
+.tv-brand small { color: #df8735; font-size: 8px; }
+.tv-brand strong { font-size: 12px; }
+.tv-app-header nav { display: flex; gap: 6px; }
+.tv-app-header nav a { padding: 10px 13px; display: flex; align-items: center; gap: 8px; border-radius: 10px; color: #425c66; text-decoration: none; font-size: 10px; }
+.tv-app-header nav a:hover { background: #f4efe6; }
+.tv-app-header nav a.is-current { color: #ca731f; background: #faf0e3; }
+.tv-app-header nav svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tv-page { padding: clamp(20px, 4vw, 44px) 16px; display: grid; place-items: start center; }
+.remote-card { width: min(430px, 100%); padding: 24px; color: #f1f7f5; background: radial-gradient(circle at 20% 0, #367d7570, transparent 33%), linear-gradient(145deg, #164b4b, #0b3533); border: 1px solid #ffffff20; border-radius: 34px; box-shadow: 0 28px 60px #143a3338, inset 1px 1px #ffffff16; }
+.remote-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.remote-heading small { color: #91c4bc; font-size: 9px; }
+.remote-heading h1 { margin: 2px 0 0; font: 700 25px/1.3 Arial, sans-serif; }
+.remote-status { display: flex; align-items: center; gap: 8px; color: #c4d7d3; font-size: 8px; }
+.remote-status span { width: 8px; height: 8px; border-radius: 50%; background: #d99b4b; box-shadow: 0 0 0 4px #d99b4b20; }
+.remote-status.is-online span { background: #62cf91; box-shadow: 0 0 0 4px #62cf9120; }
+.remote-status.is-offline span { background: #e3766d; box-shadow: 0 0 0 4px #e3766d20; }
+.csrf-token { display: none; }
+.remote-body { padding: 20px; background: linear-gradient(145deg, #202927, #14201f); border: 1px solid #ffffff0d; border-radius: 27px; box-shadow: inset 3px 3px 12px #07111090, inset -2px -2px 8px #ffffff08; }
+.remote-body button { min-width: 48px; min-height: 48px; color: #d8e5e2; background: linear-gradient(145deg, #293634, #1c2725); border: 1px solid #ffffff0b; border-radius: 16px; box-shadow: 4px 5px 10px #07110f85, -2px -2px 6px #ffffff08; transition: transform .08s ease, background .15s ease; }
+.remote-body button:hover { color: #fff; background: #304440; }
+.remote-body button:active, .remote-body button.is-sending { transform: translateY(2px) scale(.96); background: #3b5c56; box-shadow: inset 2px 2px 5px #08131190; }
+.remote-body button:focus-visible { outline: 3px solid #eeb657; outline-offset: 3px; }
+.power-button { width: 64px; height: 64px; margin: 0 auto 20px; display: grid; place-items: center; color: #ff8b7f !important; background: linear-gradient(145deg, #492c2b, #2d2322) !important; border-color: #ff93822e !important; border-radius: 50% !important; }
+.power-button svg { width: 29px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.button-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.button-row button, .mute-button { padding: 8px 3px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; font-size: 8px; }
+.button-row button span, .mute-button span { color: #8fd0c4; font: 600 19px/1 Arial, sans-serif; }
+.rocker-grid { margin: 18px 0; display: grid; grid-template-columns: 1fr .85fr 1fr; gap: 12px; align-items: center; }
+.rocker { display: grid; overflow: hidden; border-radius: 25px; box-shadow: 4px 5px 10px #07110f85; }
+.rocker button { height: 57px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 0; box-shadow: none; }
+.rocker button + button { border-top: 1px solid #ffffff12; }
+.rocker b { font: 500 24px/1 Arial, sans-serif; }
+.rocker small { color: #8aa09b; font: 700 8px Arial, sans-serif; }
+.dpad { width: 210px; height: 210px; margin: 8px auto 20px; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); place-items: stretch; direction: ltr; border-radius: 50%; background: radial-gradient(circle, #2c3e3b 0 31%, #1b2826 32% 100%); box-shadow: 7px 9px 16px #07110f90, -3px -3px 8px #ffffff08; }
+.dpad button { min-width: 0; min-height: 0; color: #a8bfba; background: transparent; border: 0; border-radius: 50%; box-shadow: none; font: 600 17px Arial, sans-serif; }
+.dpad-up { grid-area: 1 / 2; }.dpad-left { grid-area: 2 / 1; }.dpad-ok { grid-area: 2 / 2; color: #fff !important; background: #315b55 !important; }.dpad-right { grid-area: 2 / 3; }.dpad-down { grid-area: 3 / 2; }
+.utility-controls { grid-template-columns: repeat(2, 1fr); margin-bottom: 18px; }
+.number-pad { display: grid; grid-template-columns: repeat(3, 58px); justify-content: center; gap: 10px 18px; direction: ltr; }
+.number-pad button { border-radius: 50%; font: 600 17px Arial, sans-serif; }
+.number-pad .zero { grid-column: 2; }
+.remote-feedback { min-height: 20px; margin: 14px 6px -4px; color: #ffc0b8; text-align: center; font-size: 9px; line-height: 1.8; }
+.remote-feedback:empty { visibility: hidden; }
+@media (max-width: 560px) {
+  .tv-app-header { min-height: 58px; padding: 9px 13px; }
+  .tv-brand > span:last-child, .tv-app-header nav a:first-child { display: none; }
+  .tv-app-header nav a { padding: 9px; font-size: 9px; }
+  .tv-page { padding: 12px 8px calc(20px + env(safe-area-inset-bottom)); }
+  .remote-card { padding: 16px; border-radius: 27px; }
+  .remote-body { padding: 17px 14px; }
+  .dpad { width: 190px; height: 190px; }
+}
+@media (max-height: 780px) and (min-width: 700px) {
+  .remote-card { width: min(760px, 100%); }
+  .remote-body { display: grid; grid-template-columns: 1fr 1.15fr; gap: 14px 24px; align-items: center; }
+  .power-button, .main-controls, .rocker-grid { grid-column: 1; }
+  .dpad, .utility-controls, .number-pad { grid-column: 2; }
+  .dpad { grid-row: 1 / span 2; }
+}

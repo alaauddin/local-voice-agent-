@@ -316,6 +316,7 @@ class RemoteTemplateButton(models.Model):
 class RemoteControl(models.Model):
     class DeviceType(models.TextChoices):
         RAW = "raw", "Raw IR"
+        LG_TV = "lg_tv", "LG TV"
         AC = "ac", "Air conditioner"
 
     class Brand(models.TextChoices):
@@ -350,6 +351,11 @@ class RemoteControl(models.Model):
         blank=True,
         db_index=True,
         help_text="Must match DEVICE_NAME reported by the ESP32 /identity endpoint.",
+    )
+    controller_url = models.URLField(
+        max_length=500,
+        blank=True,
+        help_text="Base URL of the dedicated controller, for example http://192.168.1.50.",
     )
     device_ip = models.GenericIPAddressField(
         protocol="IPv4",

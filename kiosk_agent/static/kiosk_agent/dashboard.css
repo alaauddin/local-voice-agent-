@@ -156,3 +156,49 @@
   .resort-dashboard .remote-popup-content .dashboard-device { padding: 12px; }
   .resort-dashboard .remote-popup-content .dashboard-ac-actions { flex-wrap: wrap; }
 }
+
+.resort-dashboard .lg-tv-open { min-height: 52px; flex-direction: row; text-decoration: none; font-size: 9px; }
+.resort-dashboard .lg-tv-open svg { width: 22px; }
+.remote-popup-content .device-tv { max-width: 410px; margin-inline: auto; color: #edf6f4; background: linear-gradient(145deg, #1c2c29, #101c1a) !important; }
+.remote-popup-content .device-tv .dashboard-device-heading { direction: rtl; }
+.lg-tv-remote.is-expanded { display: grid; gap: 15px; }
+.lg-tv-control {
+  min-width: 48px; min-height: 48px; padding: 7px; color: #d8e5e2;
+  background: linear-gradient(145deg, #293634, #1c2725); border: 1px solid #ffffff0b;
+  border-radius: 15px; box-shadow: 4px 5px 10px #07110f85, -2px -2px 6px #ffffff08;
+  font: 600 9px/1.2 Arial, sans-serif; user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: transform .08s ease, background .15s ease;
+}
+.lg-tv-control:hover { color: #fff; background: #304440; }
+.lg-tv-control:active, .lg-tv-control.sending { transform: translateY(2px) scale(.96); background: #3b5c56; box-shadow: inset 2px 2px 5px #08131190; }
+.lg-tv-control.error { color: #ffb5ac; background: #55312e; }
+.lg-power { width: 62px; height: 62px; margin-inline: auto; color: #ff8b7f; background: linear-gradient(145deg, #492c2b, #2d2322); border-radius: 50%; font-size: 24px; }
+.lg-button-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; direction: ltr; }
+.lg-rockers { display: grid; grid-template-columns: 1fr .8fr 1fr; align-items: center; gap: 12px; direction: ltr; }
+.lg-rocker { display: grid; overflow: hidden; border-radius: 22px; box-shadow: 4px 5px 10px #07110f85; }
+.lg-rocker .lg-tv-control { height: 54px; border-radius: 0; box-shadow: none; }
+.lg-rocker .lg-tv-control + .lg-tv-control { border-top: 1px solid #ffffff12; }
+.lg-mute { min-height: 54px; }
+.lg-dpad {
+  width: 205px; height: 205px; margin-inline: auto; display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr); direction: ltr;
+  border-radius: 50%; background: radial-gradient(circle, #2f4a45 0 31%, #192725 32% 100%);
+  box-shadow: 7px 9px 16px #07110f90, -3px -3px 8px #ffffff08;
+}
+.lg-dpad .lg-tv-control { min-width: 0; min-height: 0; color: #c5d8d4; background: transparent; border: 0; border-radius: 50%; box-shadow: none; font-size: 16px; }
+.lg-dpad .lg-up { grid-area: 1 / 2; }
+.lg-dpad .lg-left { grid-area: 2 / 1; }
+.lg-dpad .lg-ok { grid-area: 2 / 2; color: #fff; background: #326b62; }
+.lg-dpad .lg-right { grid-area: 2 / 3; }
+.lg-dpad .lg-down { grid-area: 3 / 2; }
+.lg-button-row.lg-utility { grid-template-columns: repeat(2, 1fr); }
+.lg-numbers { display: grid; grid-template-columns: repeat(3, 54px); justify-content: center; gap: 9px 17px; direction: ltr; }
+.lg-numbers .lg-tv-control { border-radius: 50%; font-size: 15px; }
+.lg-numbers .lg-zero { grid-column: 2; }
+
+@media (max-width: 600px) {
+  .remote-popup-content .device-tv { padding: 13px !important; }
+  .lg-tv-remote.is-expanded { gap: 12px; }
+  .lg-dpad { width: 185px; height: 185px; }
+  .lg-numbers { grid-template-columns: repeat(3, 50px); gap: 8px 14px; }
+}

@@ -69,6 +69,7 @@ from .serializers import (
 )
 from .services import AgentBusyError, enqueue_message
 from .tasks import sync_remote_ips
+from .tv_remote import TVRemoteError, get_status as get_tv_status, send_command as send_tv_command
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +291,7 @@ def button_config_save_view(request, remote_id):
 
     with transaction.atomic():
         remote = get_object_or_404(RemoteControl.objects.select_for_update(), pk=remote_id)
-        if not rows and remote.device_type != RemoteControl.DeviceType.AC:
+        if not rows and remote.device_type not in (RemoteControl.DeviceType.AC, RemoteControl.DeviceType.LG_TV):
             return JsonResponse({"detail": "Provide at least one button."}, status=400)
         if remote_settings is None:
             remote_settings = {field: getattr(remote, field) for field in remote_fields}
@@ -482,11 +483,25 @@ def button_config_sync_ip_view(request, remote_id):
             {"detail": "The device firmware does not advertise AC control support."},
             status=409,
         )
+    if (
+        remote.device_type == RemoteControl.DeviceType.LG_TV
+        and "lg_tv_remote" not in device.get("capabilities", [])
+    ):
+        return JsonResponse({"detail": "The device is not an LG TV controller."}, status=409)
     remote.device_ip = device["ip"]
     remote.device_last_seen_at = timezone.now()
+    if remote.device_type == RemoteControl.DeviceType.LG_TV:
+        remote.controller_url = f"http://{remote.device_ip}"
     command_url = f"http://{remote.device_ip}/ir"
     with transaction.atomic():
-        remote.save(update_fields=("device_ip", "device_last_seen_at", "updated_at"))
+        remote.save(
+            update_fields=(
+                "device_ip",
+                "device_last_seen_at",
+                "controller_url",
+                "updated_at",
+            )
+        )
         updated_buttons = remote.buttons.update(command_url=command_url)
     return JsonResponse(
         {
@@ -527,6 +542,91 @@ class KioskPageView(TemplateView):
         context["voice_source"] = settings.VOICE_SOURCE
         context["voice_activation_mode"] = settings.VOICE_ACTIVATION_MODE
         return context
+
+class TVRemotePageView(KioskPageView):
+    template_name = "kiosk_agent/tv_remote.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        remote_id = self.kwargs.get("remote_id")
+        remotes = RemoteControl.objects.filter(
+            device_type=RemoteControl.DeviceType.LG_TV,
+            is_active=True,
+            guest_visible=True,
+        )
+        context["tv_remote"] = (
+            remotes.filter(pk=remote_id).first() if remote_id else remotes.first()
+        )
+        return context
+
+
+def _has_kiosk_access(request):
+    expected = settings.KIOSK_API_KEY
+    supplied = request.headers.get("X-Kiosk-Key", "")
+    if expected and supplied and secrets.compare_digest(supplied, expected):
+        return True
+    return valid_kiosk_cookie(request.COOKIES.get(KIOSK_COOKIE_NAME, ""))
+
+
+def _active_lg_remote(remote_id):
+    try:
+        return RemoteControl.objects.get(
+            pk=remote_id,
+            device_type=RemoteControl.DeviceType.LG_TV,
+            is_active=True,
+        )
+    except (RemoteControl.DoesNotExist, TypeError, ValueError):
+        return None
+
+
+@require_POST
+def tv_remote_command_view(request):
+    if not _has_kiosk_access(request):
+        return JsonResponse({"success": False, "error": "Kiosk access denied"}, status=403)
+    try:
+        payload = json.loads(request.body or "{}")
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return JsonResponse({"success": False, "error": "Invalid JSON payload"}, status=400)
+    command = payload.get("command") if isinstance(payload, dict) else None
+    remote = _active_lg_remote(payload.get("remote_id") if isinstance(payload, dict) else None)
+    if remote is None:
+        return JsonResponse({"success": False, "error": "TV remote not found"}, status=404)
+    if not isinstance(command, str):
+        return JsonResponse({"success": False, "error": "Unsupported TV remote command"}, status=400)
+    try:
+        result = send_tv_command(remote.controller_url, command)
+    except TVRemoteError as exc:
+        status_map = {
+            "invalid_command": 400,
+            "not_configured": 503,
+            "timeout": 504,
+            "offline": 503,
+            "controller_error": 502,
+            "invalid_response": 502,
+        }
+        return JsonResponse(
+            {"success": False, "error": exc.message},
+            status=status_map.get(exc.code, 502),
+        )
+    return JsonResponse({"success": True, "command": result.get("command", command)})
+
+
+@require_GET
+def tv_remote_status_view(request):
+    if not _has_kiosk_access(request):
+        return JsonResponse({"success": False, "online": False, "error": "Kiosk access denied"}, status=403)
+    remote = _active_lg_remote(request.GET.get("remote_id"))
+    if remote is None:
+        return JsonResponse({"success": False, "online": False, "error": "TV remote not found"}, status=404)
+    try:
+        get_tv_status(remote.controller_url)
+    except TVRemoteError as exc:
+        status_code = 504 if exc.code == "timeout" else 503
+        return JsonResponse(
+            {"success": False, "online": False, "error": exc.message},
+            status=status_code,
+        )
+    return JsonResponse({"success": True, "online": True})
 
 
 def _validated_realtime_session(data):
@@ -902,7 +1002,7 @@ class RemotesListView(APIView):
         payload = []
         for remote in remotes:
             active_buttons = [b for b in remote.buttons.all() if b.is_active]
-            if remote.device_type != RemoteControl.DeviceType.AC and not active_buttons:
+            if remote.device_type == RemoteControl.DeviceType.RAW and not active_buttons:
                 continue
             payload.append(RemoteControlPublicSerializer(remote).data)
         return Response({"remotes": payload})

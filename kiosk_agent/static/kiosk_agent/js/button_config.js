@@ -186,6 +186,10 @@ function isACRemote() {
   return activeRemote?.device_type === "ac";
 }
 
+function isLGTVRemote() {
+  return activeRemote?.device_type === "lg_tv";
+}
+
 function selectedProtocol() {
   return acConfig?.protocols?.find((item) => item.value === acProtocol.value) || null;
 }
@@ -278,13 +282,13 @@ function renderAC() {
 
 function renderRemoteType() {
   const isAC = isACRemote();
-  rawWorkspace.hidden = isAC;
+  rawWorkspace.hidden = isAC || isLGTVRemote();
   acWorkspace.hidden = !isAC;
   columnCount.closest("label").hidden = isAC;
-  addButton.hidden = isAC;
-  remoteTypeBadge.textContent = isAC ? "مكيف AC" : "ريموت RAW IR";
+  addButton.hidden = isAC || isLGTVRemote();
+  remoteTypeBadge.textContent = isAC ? "مكيف AC" : isLGTVRemote() ? "تلفاز LG" : "ريموت RAW IR";
   remoteTypeBadge.classList.toggle("ac", isAC);
-  saveButton.textContent = isAC ? "حفظ إعدادات المكيف" : "حفظ الترتيب والإعدادات";
+  saveButton.textContent = isAC ? "حفظ إعدادات المكيف" : isLGTVRemote() ? "حفظ إعدادات تلفاز LG" : "حفظ الترتيب والإعدادات";
   stepsNav.classList.toggle("ac-mode", isAC);
   showStep(isAC ? "device" : "buttons");
 }
@@ -300,7 +304,7 @@ function showStep(stepName) {
     if (active) button.setAttribute("aria-current", "step");
     else button.removeAttribute("aria-current");
   });
-  rawWorkspace.hidden = isACRemote() || !["buttons", "button-settings"].includes(step);
+  rawWorkspace.hidden = isACRemote() || isLGTVRemote() || !["buttons", "button-settings"].includes(step);
   rawWorkspace.classList.add("single-panel");
   rawWorkspace.classList.toggle("editing-step", step === "button-settings");
 }

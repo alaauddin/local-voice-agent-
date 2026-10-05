@@ -21,6 +21,7 @@
 <body class="resort-dashboard">
   <main class="kiosk-shell">
     <section class="chat-panel" aria-label="محادثة الكونسيرج">
+    <form class="csrf-form" hidden aria-hidden="true">{% csrf_token %}</form>
       <header class="mobile-header app-header">
         <div class="header-brand" aria-label="Sunset Resort منتجع الغروب">
           <div class="sunset-wordmark" dir="ltr"><span>sun</span><b>S</b><span>et</span></div>

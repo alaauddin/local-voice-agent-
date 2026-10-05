@@ -68,10 +68,24 @@ def sync_remote_ips() -> dict[str, int]:
                     )
                 continue
 
+            if (
+                remote.device_type == RemoteControl.DeviceType.LG_TV
+                and "lg_tv_remote" not in device.get("capabilities", [])
+            ):
+                incompatible += 1
+                continue
+
             remote.device_ip = device["ip"]
             remote.device_last_seen_at = now
+            if remote.device_type == RemoteControl.DeviceType.LG_TV:
+                remote.controller_url = f"http://{remote.device_ip}"
             remote.save(
-                update_fields=("device_ip", "device_last_seen_at", "updated_at")
+                update_fields=(
+                    "device_ip",
+                    "device_last_seen_at",
+                    "controller_url",
+                    "updated_at",
+                )
             )
             updated_buttons += remote.buttons.update(
                 command_url=f"http://{remote.device_ip}/ir"
