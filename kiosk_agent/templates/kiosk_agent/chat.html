@@ -49,6 +49,11 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-1-2V7a2 2 0 0 1 2-2Z"/><path d="M8 10h8M8 13h5"/></svg>
             <span id="messageCount" hidden>0</span>
           </button>
+          <div class="battery-status" id="batteryStatus" role="status" aria-live="polite" hidden>
+            <span class="battery-icon" aria-hidden="true"><span id="batteryFill"></span></span>
+            <span id="batteryValue" dir="ltr">--%</span>
+            <span class="battery-charging" id="batteryCharging" aria-hidden="true" hidden>⚡</span>
+          </div>
           <div class="connection-pill" id="connectionPill" role="status">
             <span class="connection-dot mobile-status" id="mobileStatus"></span>
             <span id="connectionText">جاري الاتصال…</span>
@@ -207,6 +212,6 @@
     <div id="remotePopupContent" class="remote-popup-content"></div>
   </dialog>
 
-  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=page-zoom-2"></script>
+  <script type="module" src="{% static 'kiosk_agent/chat.js' %}?v=battery-status-1"></script>
 </body>
 </html>

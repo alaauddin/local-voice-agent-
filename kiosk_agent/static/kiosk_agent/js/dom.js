@@ -10,6 +10,8 @@ const el = {
   interim: $("#interimTranscript"), avatar: $("#avatarStage"), reload: $("#reloadButton"), reset: $("#resetButton"),
   zoomOut: $("#zoomOutButton"), zoomReset: $("#zoomResetButton"), zoomIn: $("#zoomInButton"),
   zoomValue: $("#zoomValue"),
+  batteryStatus: $("#batteryStatus"), batteryFill: $("#batteryFill"),
+  batteryValue: $("#batteryValue"), batteryCharging: $("#batteryCharging"),
   resetDialog: $("#resetDialog"), cancelReset: $("#cancelReset"), confirmReset: $("#confirmReset"),
   settingsButton: $("#voiceSettingsButton"), settingsDialog: $("#voiceSettingsDialog"),
   closeSettings: $("#closeVoiceSettings"), fallbackEnabled: $("#fallbackEnabled"),

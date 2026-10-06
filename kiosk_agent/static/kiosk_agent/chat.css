@@ -788,6 +788,21 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
 .zoom-controls button:hover:not(:disabled) { color: var(--gold); background: rgba(223,135,53,.08); }
 .zoom-controls button:disabled { opacity: .35; cursor: not-allowed; }
 .zoom-controls #zoomResetButton { min-width: 52px; font-size: 10px; }
+.battery-status {
+  min-height: 38px; padding: 0 10px; display: flex; align-items: center; gap: 7px; direction: ltr;
+  color: var(--forest); background: rgba(255,255,255,.72); border: 1px solid rgba(77,133,128,.18);
+  border-radius: 13px; font: 600 10px/1 Arial, sans-serif; white-space: nowrap;
+}
+.battery-status[hidden], .battery-charging[hidden] { display: none; }
+.battery-icon {
+  position: relative; width: 22px; height: 11px; padding: 2px; display: block;
+  border: 1.5px solid currentColor; border-radius: 3px;
+}
+.battery-icon::after { content: ""; position: absolute; top: 2px; right: -4px; width: 2px; height: 5px; background: currentColor; border-radius: 0 2px 2px 0; }
+.battery-icon > span { display: block; width: 0; height: 100%; background: #48a87d; border-radius: 1px; transition: width .25s ease; }
+.battery-status.is-low { color: var(--danger); }
+.battery-status.is-low .battery-icon > span { background: var(--danger); }
+.battery-charging { color: var(--gold); font-size: 12px; }
 
 .app-header .sunset-wordmark {
   font-size: clamp(27px, 2.4vw, 36px);
@@ -1201,6 +1216,8 @@ dialog p { color: var(--muted); font-size: 13px; line-height: 1.9; }
   .header-status { gap: 6px; }
   .zoom-controls button { min-width: 32px; height: 36px; padding: 0 6px; }
   .zoom-controls #zoomResetButton { display: none; }
+  .battery-status { min-height: 36px; padding: 0 7px; }
+  .battery-icon { display: none; }
   .app-header .connection-pill { width: 10px; height: 10px; margin: 0 2px; padding: 0; border: 0; background: transparent; }
   .app-header .connection-pill > span:last-child { display: none; }
   .app-header .connection-dot { width: 9px; height: 9px; }

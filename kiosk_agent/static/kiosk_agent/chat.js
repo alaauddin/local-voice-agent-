@@ -51,6 +51,30 @@ function applyZoom(value) {
   return zoom;
 }
 
+async function initializeBatteryStatus() {
+  if (!("getBattery" in navigator)) return;
+  try {
+    const battery = await navigator.getBattery();
+    const updateBattery = () => {
+      const percentage = Math.round(battery.level * 100);
+      el.batteryValue.textContent = percentage + "%";
+      el.batteryFill.style.width = percentage + "%";
+      el.batteryCharging.hidden = !battery.charging;
+      el.batteryStatus.classList.toggle("is-low", percentage <= 20 && !battery.charging);
+      el.batteryStatus.setAttribute("aria-label", "بطارية الجهاز " + percentage + "%" + (battery.charging ? "، قيد الشحن" : ""));
+      el.batteryStatus.title = battery.charging ? "بطارية الجهاز — قيد الشحن" : "بطارية الجهاز";
+      el.batteryStatus.hidden = false;
+    };
+    updateBattery();
+    battery.addEventListener("levelchange", updateBattery);
+    battery.addEventListener("chargingchange", updateBattery);
+  } catch (error) {
+    console.debug("[Battery] status unavailable", error);
+  }
+}
+
+initializeBatteryStatus();
+
 let pageZoom = applyZoom(localStorage.getItem(zoomStorageKey));
 function changeZoom(direction) {
   const currentIndex = zoomLevels.indexOf(pageZoom);
