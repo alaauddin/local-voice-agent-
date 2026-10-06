@@ -2,7 +2,7 @@
 
 import { el } from "./dom.js";
 import { state } from "./state.js";
-import { wakeWord, realtimeEnabled } from "./config.js";
+import { wakeWord, realtimeEnabled, activationMode } from "./config.js";
 import { setAvatar, setBusy, updateControls, scheduleAutoRealtime, cancelAutoStart } from "./ui.js";
 import { voiceController, VoicePhase } from "./voice-controller.js";
 
@@ -46,13 +46,16 @@ export function endConversation(sayGoodbye = true) {
   voiceController.call("stopRecognition");
   el.interim.textContent = "";
   setAvatar("idle");
-  el.voiceStatus.textContent = `قل «${wakeWord}» لبدء محادثة جديدة`;
+  el.voiceStatus.textContent = activationMode === "button"
+    ? "اضغط زر الميكروفون لبدء محادثة جديدة"
+    : `قل «${wakeWord}» لبدء محادثة جديدة`;
   updateControls();
   if (realtimeEnabled && state.micAutoStartEnabled && state.connected) {
     el.voiceStatus.textContent = "تفضل… أنا أستمع";
     scheduleAutoRealtime(900);
     return;
   }
+  if (activationMode === "button") return;
   const resumeWake = () => voiceController.call("scheduleWakeListener", 350);
   if (sayGoodbye) voiceController.call("speakBrowser", "في أمان الله، أنا هنا متى احتجتني", resumeWake);
   else resumeWake();

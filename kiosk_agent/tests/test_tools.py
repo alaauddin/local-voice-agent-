@@ -231,6 +231,62 @@ class AgentToolTests(TestCase):
         self.assertFalse(result["pressed"])
         self.assertEqual(result["reason"], "forbidden")
 
+    def test_lg_tv_is_listed_without_raw_button_rows(self):
+        device = RemoteControl.objects.create(
+            name="Living room LG TV", slug="living-lg-tv", location="Living room",
+            device_type=RemoteControl.DeviceType.LG_TV, voice_enabled=True,
+            controller_url="http://192.168.1.20",
+        )
+        result = json.loads(execute_tool(
+            "list_remote_controls", "{}",
+            stay_id=str(self.config.current_stay_id),
+            request_id="00000000-0000-0000-0000-000000000010",
+        ))["result"]
+        self.assertEqual(result["devices"][0]["device_id"], device.pk)
+        self.assertIn("VOL_UP", result["devices"][0]["commands"])
+        self.assertNotIn("buttons", result["devices"][0])
+
+    @patch("kiosk_agent.core.tools.send_tv_command")
+    def test_agent_can_control_voice_enabled_lg_tv(self, send_command):
+        device = RemoteControl.objects.create(
+            name="Living room LG TV", slug="living-lg-tv-control", location="Living room",
+            device_type=RemoteControl.DeviceType.LG_TV, voice_enabled=True,
+            controller_url="http://192.168.1.20",
+        )
+        result = json.loads(execute_tool(
+            "control_lg_tv", json.dumps({"device_id": device.pk, "command": "VOL_UP"}),
+            stay_id=str(self.config.current_stay_id),
+            request_id="00000000-0000-0000-0000-000000000011",
+        ))["result"]
+        self.assertTrue(result["sent"])
+        send_command.assert_called_once_with("http://192.168.1.20", "VOL_UP")
+        self.assertTrue(KioskAuditLog.objects.filter(event="remote_pressed").exists())
+
+    @patch("kiosk_agent.core.tools.send_tv_command")
+    def test_agent_cannot_control_voice_disabled_lg_tv(self, send_command):
+        device = RemoteControl.objects.create(
+            name="Private LG TV", slug="private-lg-tv",
+            device_type=RemoteControl.DeviceType.LG_TV, voice_enabled=False,
+            controller_url="http://192.168.1.21",
+        )
+        result = json.loads(execute_tool(
+            "control_lg_tv", json.dumps({"device_id": device.pk, "command": "POWER"}),
+            stay_id=str(self.config.current_stay_id),
+            request_id="00000000-0000-0000-0000-000000000012",
+        ))["result"]
+        self.assertFalse(result["sent"])
+        self.assertEqual(result["reason"], "not_found_or_voice_disabled")
+        send_command.assert_not_called()
+
+    def test_agent_rejects_unsupported_lg_tv_command(self):
+        result = json.loads(execute_tool(
+            "control_lg_tv", json.dumps({"device_id": 1, "command": "FACTORY_RESET"}),
+            stay_id=str(self.config.current_stay_id),
+            request_id="00000000-0000-0000-0000-000000000013",
+        ))
+        self.assertEqual(result["error"], "validation_error")
+
+
     @patch("kiosk_agent.core.tools.set_ac_state")
     def test_agent_ac_control_sends_only_requested_visible_changes(self, set_state):
         device = RemoteControl.objects.create(

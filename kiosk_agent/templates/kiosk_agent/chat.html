@@ -102,10 +102,18 @@
               <strong>تحدث الآن</strong>
               <small>أنا أسمعك، اطلب ما تحتاجه</small>
             </div>
-            <p class="voice-status" id="voiceStatus">قل «{{ voice_wake_word }}» لبدء المحادثة</p>
+            <p class="voice-status" id="voiceStatus">
+              {% if voice_activation_mode == "button" %}
+                اضغط زر الميكروفون ثم تحدث
+              {% else %}
+                قل «{{ voice_wake_word }}» لبدء المحادثة
+              {% endif %}
+            </p>
             <p class="interim-transcript" id="interimTranscript" dir="auto"></p>
             <h2>مرحباً بك في منتجع الغروب</h2>
-            <p id="welcomeMessage">قل «يا غروب» واطلب ما تحتاجه، وسأبقى معك طوال المحادثة.</p>
+            <p id="welcomeMessage">
+              {% if voice_activation_mode == "button" %}اضغط الميكروفون واطلب ما تحتاجه.{% else %}قل «يا غروب» واطلب ما تحتاجه، وسأبقى معك طوال المحادثة.{% endif %}
+            </p>
             <div class="suggestions" id="suggestions">
               <button type="button" data-message="أحتاج بطاقة واي فاي"><span>⌁</span> بطاقات الواي فاي</button>
               <button type="button" data-message="ما مرافق المنتجع المتاحة؟"><span>♧</span> مرافق المنتجع</button>

@@ -21,6 +21,7 @@ from kiosk_agent.models import (
     RemoteControl,
     StaffRequest,
 )
+from kiosk_agent.tv_remote import TVRemoteError, send_command as send_tv_command
 from kiosk_agent.remote_control import (
     RemoteCommandError,
     get_pressable_remote_button,
@@ -71,6 +72,16 @@ class PressRemoteButtonInput(StrictToolInput):
     confirmation_token: str = Field(max_length=1000)
 
 
+class ControlLGTVInput(StrictToolInput):
+    device_id: int = Field(gt=0)
+    command: Literal[
+        "POWER", "VOL_UP", "VOL_DOWN", "MUTE", "CH_UP", "CH_DOWN",
+        "INPUT", "HOME", "SETTINGS", "UP", "DOWN", "LEFT", "RIGHT",
+        "OK", "BACK", "EXIT", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+    ]
+
+
+
 class SetAirConditionerInput(StrictToolInput):
     device_id: int = Field(gt=0)
     power: bool | None
@@ -99,6 +110,7 @@ TOOL_MODELS: dict[str, type[StrictToolInput]] = {
     "get_emergency_contact": EmergencyContactInput,
     "list_remote_controls": ListRemoteControlsInput,
     "press_remote_button": PressRemoteButtonInput,
+    "control_lg_tv": ControlLGTVInput,
     "set_air_conditioner": SetAirConditionerInput,
 }
 
@@ -116,6 +128,9 @@ def openai_tool_schemas() -> list[dict]:
             "Press one listed non-AC remote button using its button_id. Pass an empty "
             "confirmation_token initially. If confirmation is required, ask the guest and use the "
             "returned token only in a later turn after an explicit yes."
+        ),
+        "control_lg_tv": (
+            "Send one supported command to a listed voice-enabled LG TV controller using its device_id."
         ),
         "set_air_conditioner": (
             "Atomically change one listed voice-enabled air conditioner. Supply null for every "
@@ -286,6 +301,12 @@ def _list_remote_controls(
                 state, _ = ACState.objects.get_or_create(device=remote)
                 item["state"] = serialize_ac_state(state)
                 item["capabilities"] = _visible_ac_capabilities(remote)
+            elif remote.device_type == RemoteControl.DeviceType.LG_TV:
+                item["commands"] = [
+                    "POWER", "VOL_UP", "VOL_DOWN", "MUTE", "CH_UP", "CH_DOWN",
+                    "INPUT", "HOME", "SETTINGS", "UP", "DOWN", "LEFT", "RIGHT",
+                    "OK", "BACK", "EXIT", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+                ]
             else:
                 item["buttons"] = [
                     {
@@ -392,6 +413,53 @@ def _press_remote_button_tool(
         close_old_connections()
 
 
+def _control_lg_tv(
+    args: ControlLGTVInput,
+    stay_id: str,
+    request_id: str,
+) -> dict:
+    close_old_connections()
+    try:
+        if not _current_stay_matches(stay_id):
+            return {"sent": False, "reason": "stay_expired"}
+        try:
+            device = RemoteControl.objects.get(
+                pk=args.device_id,
+                device_type=RemoteControl.DeviceType.LG_TV,
+                is_active=True,
+                voice_enabled=True,
+            )
+        except RemoteControl.DoesNotExist:
+            return {"sent": False, "reason": "not_found_or_voice_disabled"}
+        try:
+            send_tv_command(device.controller_url, args.command)
+        except TVRemoteError as exc:
+            KioskAuditLog.objects.create(
+                stay_id=stay_id, request_id=request_id,
+                event=KioskAuditLog.Event.REMOTE_FAILED,
+                details={
+                    "remote_id": device.pk, "source": "voice", "execution": "server",
+                    "command_type": "lg_tv", "command": args.command, "status": exc.code,
+                },
+            )
+            return {"sent": False, "reason": exc.code}
+        KioskAuditLog.objects.create(
+            stay_id=stay_id, request_id=request_id,
+            event=KioskAuditLog.Event.REMOTE_PRESSED,
+            details={
+                "remote_id": device.pk, "source": "voice", "execution": "server",
+                "command_type": "lg_tv", "command": args.command, "status": "success",
+            },
+        )
+        return {
+            "sent": True, "device": device.name, "location": device.location,
+            "command": args.command,
+        }
+    finally:
+        close_old_connections()
+
+
+
 def _audit_ac_control(
     *,
     stay_id: str,
@@ -489,6 +557,7 @@ TOOL_HANDLERS: dict[str, Callable[..., dict]] = {
     "get_emergency_contact": _emergency_contact,
     "list_remote_controls": _list_remote_controls,
     "press_remote_button": _press_remote_button_tool,
+    "control_lg_tv": _control_lg_tv,
     "set_air_conditioner": _set_air_conditioner,
 }
 

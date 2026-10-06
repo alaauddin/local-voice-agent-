@@ -11,8 +11,8 @@ class VoiceConfigurationTests(SimpleTestCase):
     def test_voice_source_is_normalized(self):
         self.assertEqual(normalize_voice_source(" Backend "), "backend")
 
-    def test_unset_voice_source_defaults_to_realtime(self):
-        self.assertEqual(normalize_voice_source(None), "realtime")
+    def test_unset_voice_source_defaults_to_backend(self):
+        self.assertEqual(normalize_voice_source(None), "backend")
 
     def test_empty_or_unknown_voice_source_is_rejected(self):
         for value in ("", "browser", "unknown"):

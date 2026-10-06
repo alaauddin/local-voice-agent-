@@ -151,6 +151,15 @@ export function toggleWakeWord() {
     cancelAutoStart();
     voiceController.call("endConversation", false);
     el.voiceStatus.textContent = "الميكروفون متوقف — اضغط للتفعيل";
+  } else if (activationMode === "button") {
+    state.wakeArmed = false;
+    state.conversationActive = true;
+    state.pendingCommand = false;
+    voiceController.beginSession({ source: voiceSource });
+    voiceController.transition(VoicePhase.LISTENING);
+    voiceController.call("touchConversationTimeout");
+    startRecognition("command");
+    el.voiceStatus.textContent = "تفضل… أنا أستمع";
   } else if (realtimeEnabled) {
     state.micAutoStartEnabled = activationMode === "always_on";
     state.wakeArmed = activationMode === "wake";

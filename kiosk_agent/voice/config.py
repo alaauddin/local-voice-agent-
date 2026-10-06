@@ -12,7 +12,7 @@ class VoiceSource(StrEnum):
 def normalize_voice_source(value: str | None) -> str:
     """Return a canonical voice source or fail fast on unsafe configuration."""
     if value is None:
-        return VoiceSource.REALTIME.value
+        return VoiceSource.BACKEND.value
     normalized = value.strip().lower()
     try:
         return VoiceSource(normalized).value
