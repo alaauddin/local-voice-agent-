@@ -32,7 +32,8 @@ voiceController.configure({
 bindRemotesUi();
 
 const zoomLevels = [80, 90, 100, 110, 120, 130, 140];
-const zoomStorageKey = "chatPageZoom";
+const zoomStorageKey = "chatPageZoomV2";
+const defaultZoom = 140;
 
 function nearestZoom(value) {
   return zoomLevels.reduce((nearest, level) => (
@@ -41,7 +42,7 @@ function nearestZoom(value) {
 }
 
 function applyZoom(value) {
-  const zoom = nearestZoom(Number(value) || 100);
+  const zoom = nearestZoom(Number(value) || defaultZoom);
   document.body.style.zoom = `${zoom}%`;
   el.zoomValue.textContent = `${zoom}%`;
   el.zoomOut.disabled = zoom === zoomLevels[0];
@@ -59,7 +60,7 @@ function changeZoom(direction) {
 
 el.zoomOut.addEventListener("click", () => changeZoom(-1));
 el.zoomIn.addEventListener("click", () => changeZoom(1));
-el.zoomReset.addEventListener("click", () => { pageZoom = applyZoom(100); });
+el.zoomReset.addEventListener("click", () => { pageZoom = applyZoom(defaultZoom); });
 document.addEventListener("keydown", (event) => {
   if (!(event.ctrlKey || event.metaKey)) return;
   if (["+", "="].includes(event.key)) {
@@ -70,7 +71,7 @@ document.addEventListener("keydown", (event) => {
     changeZoom(-1);
   } else if (event.key === "0") {
     event.preventDefault();
-    pageZoom = applyZoom(100);
+    pageZoom = applyZoom(defaultZoom);
   }
 });
 
