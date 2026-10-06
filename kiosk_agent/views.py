@@ -58,6 +58,7 @@ from .permissions import (
     valid_kiosk_cookie,
 )
 from .remote_control import RemoteCommandError, press_remote_button
+from .voice.transcribe import MAX_AUDIO_BYTES, TranscribeError, transcribe_audio
 from .serializers import (
     ChaletPublicSerializer,
     ChatRequestSerializer,
@@ -883,6 +884,49 @@ class RealtimeToolView(APIView):
             status=KioskMessage.Status.COMPLETE,
         )
         return Response(json.loads(result), status=200)
+
+
+class VoiceTranscribeView(APIView):
+    """Transcribe a push-to-talk recording server-side.
+
+    Browser SpeechRecognition is unavailable in the kiosk Chromium build
+    (it always fails with a ``network`` error), so button-mode voice input
+    records via MediaRecorder and is transcribed here with OpenAI.
+    """
+
+    authentication_classes = []
+    permission_classes = (OptionalKioskKeyPermission,)
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+
+    def post(self, request):
+        audio = request.FILES.get("audio")
+        if audio is None:
+            return Response(
+                {"error": "audio_missing", "detail": "No audio file was uploaded."},
+                status=400,
+            )
+        if audio.size and audio.size > MAX_AUDIO_BYTES:
+            return Response(
+                {"error": "audio_too_large", "detail": "The recording is too large."},
+                status=413,
+            )
+        try:
+            transcript = transcribe_audio(
+                audio.read(),
+                audio.name or "audio.webm",
+                audio.content_type or "audio/webm",
+            )
+        except TranscribeError as exc:
+            if exc.code == "audio_too_large":
+                http_status = 413
+            elif exc.retryable:
+                http_status = 502
+            else:
+                http_status = 400
+            return Response(
+                {"error": exc.code, "detail": str(exc)}, status=http_status
+            )
+        return Response({"transcript": transcript})
 
 
 class ResetView(APIView):

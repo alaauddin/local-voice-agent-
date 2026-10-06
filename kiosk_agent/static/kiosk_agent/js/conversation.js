@@ -16,11 +16,19 @@ export function finishTurn() {
     touchConversationTimeout();
   } else if (state.conversationActive) {
     voiceController.transition(VoicePhase.LISTENING);
-    el.voiceStatus.textContent = "تفضل… أنا أستمع";
     touchConversationTimeout();
-    voiceController.schedule("recognition-restart", () => {
-      voiceController.call("startRecognition", "command");
-    }, 450);
+    if (activationMode === "button" && !realtimeEnabled) {
+      // Push-to-talk: each turn starts with the mic button. Never auto-start
+      // browser SpeechRecognition here (unavailable in kiosk Chromium and it
+      // would overwrite the status with a `network` error loop).
+      voiceController.cancelTimer("recognition-restart");
+      el.voiceStatus.textContent = "تفضل… اضغط على الميكروفون للتحدث";
+    } else {
+      el.voiceStatus.textContent = "تفضل… أنا أستمع";
+      voiceController.schedule("recognition-restart", () => {
+        voiceController.call("startRecognition", "command");
+      }, 450);
+    }
   } else {
     voiceController.transition(VoicePhase.IDLE);
     el.voiceStatus.textContent = state.wakeArmed
@@ -41,6 +49,7 @@ export function endConversation(sayGoodbye = true) {
   voiceController.cancelTimer("conversation-timeout");
   state.conversationActive = false;
   state.pendingCommand = false;
+  voiceController.call("cancelPushToTalk");
   if (realtimeEnabled) voiceController.call("closeRealtime");
   else voiceController.invalidateSession({ reason: "conversation_ended" });
   voiceController.call("stopRecognition");

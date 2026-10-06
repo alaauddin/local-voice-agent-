@@ -2,7 +2,7 @@
 
 import { $, el } from "./js/dom.js?v=page-zoom-2";
 import { state, fallback } from "./js/state.js";
-import { realtimeEnabled } from "./js/config.js";
+import { realtimeEnabled, activationMode } from "./js/config.js";
 import { voiceController } from "./js/voice-controller.js";
 import {
   populatePreferredMic, unlockAudio, preferredMicKey,
@@ -17,6 +17,7 @@ import {
 import { connect } from "./js/socket.js";
 import { closeRealtime, startRealtime } from "./js/realtime.js";
 import { endConversation, touchConversationTimeout } from "./js/conversation.js";
+import { cancelPushToTalk } from "./js/push-to-talk.js";
 import {
   configureRecognition, toggleWakeWord,
   stopRecognition, startRecognition, scheduleWakeListener,
@@ -27,7 +28,12 @@ import { submitMessage, resizeInput, populateVoices, resetStay } from "./js/acti
 voiceController.configure({
   closeRealtime, endConversation, scheduleWakeListener, speakBrowser, startRealtime,
   startRecognition, stopRecognition, submitMessage, touchConversationTimeout,
+  cancelPushToTalk,
 });
+
+// Read-only debug handle for DevTools (fixes `window.state is undefined`).
+// Usage: __wazen.state, __wazen.voice.controller.phase, __wazen.voice.diagnostics
+window.__wazen = { state, voice: voiceController };
 
 bindRemotesUi();
 
@@ -164,6 +170,7 @@ document.addEventListener("visibilitychange", () => {
     stopRecognition();
     if (realtimeEnabled && state.conversationActive) {
       if (state.micAutoStartEnabled) {
+        cancelPushToTalk();
         closeRealtime();
         state.conversationActive = false;
         updateControls();
@@ -179,6 +186,11 @@ document.addEventListener("visibilitychange", () => {
     scheduleAutoRealtime(300);
     return;
   }
+  if (activationMode === "button" && !realtimeEnabled) {
+    // Push-to-talk mode: nothing to resume, the mic button starts each turn.
+    updateControls();
+    return;
+  }
   if (state.conversationActive && !realtimeEnabled) voiceController.schedule("visibility-recognition", () => startRecognition("command"), 250);
   else scheduleWakeListener(250);
 });
@@ -187,6 +199,7 @@ window.addEventListener("offline", () => setConnection("offline", "انقطع ا
 window.addEventListener("beforeunload", () => {
   cancelAutoStart();
   stopRecognition();
+  cancelPushToTalk();
   closeRealtime();
 });
 if (window.speechSynthesis) {

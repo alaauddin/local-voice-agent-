@@ -14,6 +14,7 @@ from .views import (
     RemotesSyncView,
     ResetView,
     StatusView,
+    VoiceTranscribeView,
 )
 
 app_name = "kiosk_agent"
@@ -37,6 +38,7 @@ urlpatterns = [
         RemoteButtonPressView.as_view(),
         name="remote-button-press",
     ),
+    path("voice/transcribe/", VoiceTranscribeView.as_view(), name="voice-transcribe"),
     path("reset/", ResetView.as_view(), name="reset"),
     path("health/", HealthView.as_view(), name="health"),
     path("status/", StatusView.as_view(), name="status"),

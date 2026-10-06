@@ -19,6 +19,8 @@ const state = {
   micAutoStartEnabled: activationMode === "always_on",
   localSessionId: null, currentStayId: null, connectionPromise: null,
   realtimeRetryAttempts: 0, realtimeGeneration: 0, realtimeAbortController: null, backendVoiceRequestId: null,
+  pttRecording: false, pttRecorder: null, pttStream: null, pttChunks: [], pttStopTimer: 0,
+  pttVadTimer: 0, pttAudioCtx: null, pttAnalyser: null, pttSpeechDetected: false,
   remotes: [], remoteIndex: 0, remotePressing: false, pendingRemoteButton: null,
 };
 const fallback = {

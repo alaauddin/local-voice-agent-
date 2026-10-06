@@ -8,6 +8,7 @@ import {
   createMessage, setBusy, setMessagesOpen, updateControls, cancelAutoStart,
 } from "./ui.js";
 import { startRealtime, sendRealtime, persistRealtimeMessage, closeRealtime } from "./realtime.js";
+import { cancelPushToTalk } from "./push-to-talk.js";
 import { stopRecognition } from "./recognition.js";
 import { speakBrowser } from "./speech-output.js";
 import { stopAudio } from "./tts.js";
@@ -72,6 +73,7 @@ export async function resetStay() {
   el.confirmReset.disabled = true;
   stopRecognition();
   stopAudio();
+  cancelPushToTalk();
   closeRealtime();
   state.micAutoStartEnabled = activationMode === "always_on";
   cancelAutoStart();

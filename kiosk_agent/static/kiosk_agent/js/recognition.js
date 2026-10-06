@@ -6,10 +6,23 @@ import { wakeWord, realtimeEnabled, voiceSource, activationMode } from "./config
 import { normalizeArabic, normalizedWakeWord, endConversationPhrases } from "./text.js";
 import { setAvatar, updateControls, cancelAutoStart } from "./ui.js";
 import { voiceController, VoicePhase } from "./voice-controller.js";
+import {
+  startPushToTalk, stopPushToTalk, isPushToTalkRecording,
+} from "./push-to-talk.js";
+
+function voiceDebug(...args) {
+  console.debug("[Voice]", ...args);
+}
 
 export function configureRecognition() {
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  voiceDebug("configure", {
+    hasNative: Boolean(window.SpeechRecognition),
+    hasWebkit: Boolean(window.webkitSpeechRecognition),
+    activationMode, voiceSource, realtimeEnabled,
+  });
   if (!Recognition) {
+    console.warn("[Voice] SpeechRecognition is not supported in this browser build");
     el.voiceStatus.textContent = "التعرف الصوتي غير مدعوم في هذا المتصفح — الكتابة متاحة دائماً";
     el.mic.title = "التعرف الصوتي غير مدعوم، استخدم الكتابة";
     return;
@@ -20,6 +33,7 @@ export function configureRecognition() {
   state.recognition.onstart = () => {
     state.recognizing = true;
     state.recognitionStartedAt = performance.now();
+    voiceDebug("onstart", { mode: state.recognitionMode, continuous: state.recognition.continuous });
     voiceController.transition(VoicePhase.LISTENING);
     if (state.recognitionMode === "wake") {
       setAvatar("idle");
@@ -88,9 +102,21 @@ export function recognitionResult(event) {
 
 export function recognitionError(event) {
   state.recognizing = false;
+  console.warn("[Voice] recognition error", {
+    error: event.error, message: event.message || "",
+    mode: state.recognitionMode, conversationActive: state.conversationActive,
+  });
   if (["not-allowed", "service-not-allowed"].includes(event.error)) {
     state.wakeArmed = false;
-    el.voiceStatus.textContent = "يرجى السماح باستخدام الميكروفون";
+    el.voiceStatus.textContent = `يرجى السماح باستخدام الميكروفون (${event.error})`;
+  } else if (event.error === "audio-capture") {
+    el.voiceStatus.textContent = "تعذر الوصول إلى الميكروفون — تحقق أنه غير مستخدم (audio-capture)";
+  } else if (event.error === "network") {
+    el.voiceStatus.textContent = "تعذر خدمة التعرف الصوتي — تحقق من الإنترنت (network)";
+  } else if (event.error === "aborted") {
+    voiceDebug("recognition aborted (usually a normal stop())", { mode: state.recognitionMode });
+  } else if (event.error === "no-speech") {
+    voiceDebug("recognition no-speech (silence timeout)", { mode: state.recognitionMode });
   } else if (state.recognitionMode === "command") {
     el.voiceStatus.textContent = state.conversationActive
       ? "ما زلت معك… تفضل"
@@ -105,6 +131,13 @@ export function recognitionEnded() {
   state.recognitionMode = null;
   updateControls();
   const sessionDuration = performance.now() - state.recognitionStartedAt;
+  voiceDebug("onend", {
+    endedMode, sessionDurationMs: Math.round(sessionDuration),
+    finalHandled: state.finalHandled, pendingCommand: state.pendingCommand,
+    conversationActive: state.conversationActive, busy: state.busy,
+    wakeArmed: state.wakeArmed, hidden: document.hidden,
+    restartAttempts: state.recognitionRestartAttempts,
+  });
   if (endedMode === "wake" && sessionDuration < 5000) {
     state.recognitionRestartAttempts += 1;
   } else {
@@ -116,22 +149,44 @@ export function recognitionEnded() {
     voiceController.schedule("recognition-restart", () => startRecognition("command"), 180);
   } else if (!document.hidden && endedMode === "wake" && state.wakeArmed && !state.conversationActive && !state.busy) {
     scheduleWakeListener(wakeRestartDelay);
-  } else if (!realtimeEnabled && endedMode === "command" && !state.finalHandled && state.conversationActive && !state.busy) {
+  } else if (!realtimeEnabled && endedMode === "command" && !state.finalHandled && state.conversationActive && !state.busy
+    && !(activationMode === "button")) {
+    // Button mode uses server-side push-to-talk; never resurrect browser
+    // SpeechRecognition here (it only produces `network` errors on kiosk).
     voiceController.schedule("recognition-restart", () => startRecognition("command"), 400);
   }
 }
 
+function startBlockedReason(mode) {
+  // Hard guard: button mode uses server-side push-to-talk. Browser
+  // SpeechRecognition has no service in kiosk Chromium (`network` error),
+  // so it must never start here, regardless of caller.
+  if (activationMode === "button" && !realtimeEnabled) return "ptt-mode";
+  if (realtimeEnabled && (state.realtimeReady || state.rtcPeer)) return "realtime-active";
+  if (document.hidden) return "document-hidden";
+  if (!state.recognition) return "no-recognition-object";
+  if (state.recognizing) return "already-recognizing";
+  if (state.busy) return "busy";
+  if (!state.connected) return "offline";
+  return "";
+}
+
 export function startRecognition(mode) {
-  if (realtimeEnabled && (state.realtimeReady || state.rtcPeer)) return;
-  if (document.hidden || !state.recognition || state.recognizing || state.busy || !state.connected) return;
+  const blocked = startBlockedReason(mode);
+  if (blocked) {
+    voiceDebug(`startRecognition(${mode}) blocked`, { reason: blocked });
+    return;
+  }
   state.recognitionMode = mode;
   state.finalHandled = false;
   state.recognition.continuous = mode === "wake";
-  try { state.recognition.start(); } catch (error) { console.debug("Recognition start delayed", error); }
+  voiceDebug(`startRecognition(${mode})`, { continuous: state.recognition.continuous, lang: state.recognition.lang });
+  try { state.recognition.start(); } catch (error) { console.warn("[Voice] recognition start failed", error); }
 }
 
 export function stopRecognition() {
   if (!state.recognition || !state.recognizing) return;
+  voiceDebug("stopRecognition", { mode: state.recognitionMode });
   try { state.recognition.stop(); } catch (error) { console.debug("Recognition already stopped", error); }
 }
 
@@ -146,6 +201,28 @@ export function scheduleWakeListener(delay = 250) {
 }
 
 export function toggleWakeWord() {
+  if (activationMode === "button" && !realtimeEnabled) {
+    // Chromium kiosk has no SpeechRecognition service (`network` error), so
+    // button mode records via MediaRecorder and transcribes server-side.
+    // Click starts recording; sending is automatic on silence (a second
+    // click sends immediately). The conversation ends via timeout/reset,
+    // not by toggling the mic.
+    if (isPushToTalkRecording()) {
+      stopPushToTalk();
+    } else {
+      if (!state.conversationActive) {
+        state.wakeArmed = false;
+        state.conversationActive = true;
+        state.pendingCommand = false;
+        voiceController.beginSession({ source: voiceSource });
+        voiceController.transition(VoicePhase.LISTENING);
+        voiceController.call("touchConversationTimeout");
+      }
+      void startPushToTalk();
+    }
+    updateControls();
+    return;
+  }
   if (state.conversationActive) {
     state.micAutoStartEnabled = false;
     cancelAutoStart();
