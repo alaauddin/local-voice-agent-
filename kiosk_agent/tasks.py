@@ -258,8 +258,15 @@ def forward_staff_request_task(self, staff_request_id: int) -> None:
         )
         if result.get("forwarded"):
             response = result.get("response") or {}
+            external_ref = (
+                response.get("id")
+                or response.get("external_reference")
+                or response.get("reference")
+                or response.get("uuid")
+                or ""
+            )
             request.delivery_status = StaffRequest.DeliveryStatus.DELIVERED
-            request.external_reference = str(response.get("id") or "")[:160]
+            request.external_reference = str(external_ref or "")[:160]
             request.last_error = ""
             request.save(
                 update_fields=(
@@ -271,7 +278,12 @@ def forward_staff_request_task(self, staff_request_id: int) -> None:
                 )
             )
             return
-        reason = result.get("reason") or result.get("error") or "forwarding_failed"
+        status_code = result.get("status_code")
+        reason = (
+            result.get("error")
+            or result.get("reason")
+            or (f"http_{status_code}" if status_code is not None else "forwarding_failed")
+        )
         if reason == "disabled_or_no_url":
             request.delivery_status = StaffRequest.DeliveryStatus.DISABLED
             request.last_error = ""
@@ -294,7 +306,6 @@ def forward_staff_request_task(self, staff_request_id: int) -> None:
                 "updated_at",
             )
         )
-        status_code = result.get("status_code")
         if isinstance(status_code, int) and 400 <= status_code < 500:
             return
         raise RuntimeError(request.last_error)

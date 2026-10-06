@@ -8,24 +8,54 @@ from kiosk_agent.models import ChaletConfig
 logger = logging.getLogger(__name__)
 
 
+def _is_placeholder_url(url: str) -> bool:
+    lowered = (url or "").strip().lower()
+    return (
+        not lowered
+        or "localhost" in lowered
+        or "127.0.0.1" in lowered
+        or "example.com" in lowered
+    )
+
+
 def _resolve_config(config: ChaletConfig | None) -> tuple[str, str, str, float, bool]:
+    env_url = (settings.SAAS_INTEGRATION_URL or "").strip()
+    env_token = (settings.SAAS_INTEGRATION_TOKEN or "").strip()
+    env_tenant = (settings.SAAS_TENANT_SUBDOMAIN or "").strip()
+    try:
+        env_timeout = float(getattr(settings, "SAAS_TIMEOUT_SECONDS", 5) or 5)
+    except (TypeError, ValueError):
+        env_timeout = 5.0
+    env_enabled = bool(getattr(settings, "SAAS_INTEGRATION_ENABLED", False))
+
     try:
         cfg = config or ChaletConfig.load()
     except Exception:
-        cfg = None
-        return settings.SAAS_INTEGRATION_URL.strip(), settings.SAAS_INTEGRATION_TOKEN.strip(), settings.SAAS_TENANT_SUBDOMAIN.strip(), float(getattr(settings, "SAAS_TIMEOUT_SECONDS", 5) or 5), bool(getattr(settings, "SAAS_INTEGRATION_ENABLED", False))
-    url = (cfg.saas_integration_url or "").strip()
-    token = (cfg.saas_integration_token or "").strip()
-    tenant = (cfg.saas_tenant_subdomain or "").strip()
-    timeout = float(cfg.saas_timeout_seconds or getattr(settings, "SAAS_TIMEOUT_SECONDS", 5) or 5)
-    enabled = bool(cfg.saas_enabled)
-    if not url:
-        url = settings.SAAS_INTEGRATION_URL.strip()
-        token = token or settings.SAAS_INTEGRATION_TOKEN.strip()
-        tenant = tenant or settings.SAAS_TENANT_SUBDOMAIN.strip()
-        enabled = enabled or bool(getattr(settings, "SAAS_INTEGRATION_ENABLED", False))
-        if not cfg.saas_integration_url and not cfg.saas_integration_token and not cfg.saas_tenant_subdomain:
-            timeout = float(getattr(settings, "SAAS_TIMEOUT_SECONDS", 5) or 5)
+        return env_url, env_token, env_tenant, env_timeout, env_enabled
+
+    db_url = ((cfg.saas_integration_url or "").strip())
+    db_token = ((cfg.saas_integration_token or "").strip())
+    db_tenant = ((cfg.saas_tenant_subdomain or "").strip())
+    try:
+        db_timeout = float(cfg.saas_timeout_seconds or env_timeout or 5)
+    except (TypeError, ValueError):
+        db_timeout = env_timeout
+    db_enabled = bool(cfg.saas_enabled)
+
+    # DB wins when it holds a real (non-placeholder) URL, otherwise fall back
+    # to the environment so a stale localhost row can never shadow .env.
+    if _is_placeholder_url(db_url):
+        url, token, tenant = env_url, env_token or db_token, env_tenant or db_tenant
+        timeout = env_timeout if _is_placeholder_url(db_url) and not db_url else db_timeout
+        # If the DB row was never configured, the env timeout is authoritative.
+        if not db_url and not db_token and not db_tenant:
+            timeout = env_timeout
+    else:
+        url = db_url or env_url
+        token = db_token or env_token
+        tenant = db_tenant or env_tenant
+        timeout = db_timeout
+    enabled = db_enabled or env_enabled
     return url, token, tenant, timeout, enabled
 
 
@@ -42,8 +72,11 @@ async def forward_request_to_saas(
     url, token, tenant, timeout, enabled = _resolve_config(config)
     if not enabled or not url:
         return {"forwarded": False, "reason": "disabled_or_no_url"}
-    headers = {"Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if token:
+        # SaaS (DRF) accepts the kiosk token via these headers; send all
+        # variants so TokenAuthentication and custom middleware both match.
+        headers["Authorization"] = f"Token {token}"
         headers["X-Kiosk-Token"] = token
         headers["X-API-Key"] = token
     if tenant:
@@ -75,7 +108,7 @@ async def forward_request_to_saas(
         },
     }
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             resp = await client.post(url, json=payload, headers=headers)
             try:
                 data = resp.json()
@@ -84,8 +117,15 @@ async def forward_request_to_saas(
             if 200 <= resp.status_code < 300:
                 logger.info("SaaS forwarded %s -> %s", local_reference, url)
                 return {"forwarded": True, "status_code": resp.status_code, "response": data}
-            logger.warning("SaaS forward failed %s %s: %s", resp.status_code, url, resp.text[:500])
-            return {"forwarded": False, "status_code": resp.status_code, "response": data, "reason": "http_error"}
+            body = resp.text[:500] if isinstance(resp.text, str) else ""
+            logger.warning("SaaS forward failed %s %s: %s", resp.status_code, url, body)
+            return {
+                "forwarded": False,
+                "status_code": resp.status_code,
+                "response": data,
+                "reason": "http_error",
+                "error": f"http_{resp.status_code}: {body}".strip()[:500],
+            }
     except Exception as exc:
         logger.warning("SaaS forward exception %s: %s", url, exc)
         return {"forwarded": False, "reason": "exception", "error": str(exc)[:500]}
