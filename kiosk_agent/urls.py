@@ -15,6 +15,8 @@ from .views import (
     ResetView,
     StatusView,
     VoiceTranscribeView,
+    WifiConnectView,
+    WifiStatusView,
 )
 
 app_name = "kiosk_agent"
@@ -42,4 +44,6 @@ urlpatterns = [
     path("reset/", ResetView.as_view(), name="reset"),
     path("health/", HealthView.as_view(), name="health"),
     path("status/", StatusView.as_view(), name="status"),
+    path("wifi/", WifiStatusView.as_view(), name="wifi-status"),
+    path("wifi/connect/", WifiConnectView.as_view(), name="wifi-connect"),
 ]

@@ -24,6 +24,7 @@ import {
 } from "./js/recognition.js";
 import { speakBrowser } from "./js/speech-output.js";
 import { submitMessage, resizeInput, populateVoices, resetStay } from "./js/actions.js";
+import { initNetworkPopover } from "./js/network.js";
 
 voiceController.configure({
   closeRealtime, endConversation, scheduleWakeListener, speakBrowser, startRealtime,
@@ -213,4 +214,5 @@ configureRecognition();
 loadMemory();
 syncAndLoadRemotes();
 startRemotesRefresh();
+initNetworkPopover();
 connect();

@@ -57,6 +57,18 @@ services:
   web:
     <<: *app
     network_mode: host
+    # D-Bus access to the host NetworkManager is blocked by Docker's default
+    # AppArmor profile ("...An AppArmor policy prevents this sender...").
+    # Unconfine only the web service (the sole NM D-Bus client).
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - ./db.sqlite3:/app/data/db.sqlite3
+      # Wi-Fi control: let nmcli inside the container talk to the host's
+      # NetworkManager over the D-Bus system bus. Directory (not socket file)
+      # so `compose up` still works on hosts without NetworkManager — the app
+      # then reports Wi-Fi as unavailable instead of crashing.
+      - /run/dbus:/run/dbus
     environment:
       REDIS_URL: redis://127.0.0.1:16380/0
       SQLITE_PATH: /app/data/db.sqlite3

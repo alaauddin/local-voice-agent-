@@ -11,6 +11,12 @@ load_dotenv(BASE_DIR / ".env")
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-only-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() in {"1", "true", "yes"}
 ALLOWED_HOSTS = [x.strip() for x in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if x.strip()]
+# LAN kiosk: allow any device/origin to open the page. The kiosk is a
+# single-purpose display with no cross-origin popups, so COOP is disabled
+# to avoid console warnings on plain-HTTP LAN URLs. Note: this does NOT
+# grant microphone access on http://<lan-ip> — browsers only allow the mic
+# on secure contexts (https or http://localhost).
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 INSTALLED_APPS = [
     "daphne",

@@ -50,7 +50,7 @@ RUN python setup.py build_ext --inplace --parallel "$(nproc)" \
 FROM base AS runtime
 
 RUN apt-get update -qq \
-    && apt-get install -y --no-install-recommends tini \
+    && apt-get install -y --no-install-recommends tini network-manager libglib2.0-bin \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=native-builder /usr/local /usr/local

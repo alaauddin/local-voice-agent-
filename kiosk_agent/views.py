@@ -75,6 +75,74 @@ from .tv_remote import TVRemoteError, get_status as get_tv_status, send_command 
 logger = logging.getLogger(__name__)
 
 
+def _get_server_network():
+    """Best-effort LAN identity for staff diagnostics on the kiosk page.
+
+    Returns hostname, local IP and Wi-Fi SSID when discoverable.
+    All lookups are timeout-guarded and never raise — unknown fields are "".
+    """
+    import shutil
+    import socket
+    import subprocess
+
+    hostname = ""
+    local_ip = ""
+    ssid = ""
+    interface = ""
+    try:
+        hostname = socket.gethostname()[:120]
+    except Exception:
+        hostname = ""
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.settimeout(0.5)
+        # No packet is sent — connect() only selects the outbound interface.
+        probe.connect(("8.8.8.8", 80))
+        local_ip = probe.getsockname()[0]
+        probe.close()
+    except Exception:
+        try:
+            local_ip = socket.gethostbyname(hostname or "localhost")
+        except Exception:
+            local_ip = ""
+    if local_ip in {"127.0.0.1", "127.0.1.1"}:
+        local_ip = ""
+
+    def _run(argv, timeout=1.0):
+        try:
+            if not shutil.which(argv[0]):
+                return ""
+            result = subprocess.run(
+                argv, capture_output=True, text=True, timeout=timeout
+            )
+            if result.returncode != 0:
+                return ""
+            return (result.stdout or "").strip()[:120]
+        except Exception:
+            return ""
+
+    # Preferred: NetworkManager. Format "yes:MySSID".
+    nmcli_out = _run(["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"])
+    if nmcli_out:
+        for line in nmcli_out.splitlines():
+            if line.startswith("yes:"):
+                ssid = line[4:].strip()[:120]
+                if ssid:
+                    interface = "wifi"
+                    break
+    if not ssid:
+        iwgetid_out = _run(["iwgetid", "-r"])
+        if iwgetid_out and "ESSID" not in iwgetid_out:
+            ssid = iwgetid_out.strip()[:120]
+            interface = interface or "wifi"
+    return {
+        "hostname": hostname or "",
+        "local_ip": local_ip or "",
+        "ssid": ssid or "",
+        "interface": interface or "",
+    }
+
+
 def _serialize_config_button(button):
     return {
         "id": button.pk,
@@ -1027,8 +1095,70 @@ class StatusView(APIView):
                 "last_agent_failure_at": (
                     last_failure.created_at if last_failure else None
                 ),
+                "network": _get_server_network(),
             }
         )
+
+
+class WifiStatusView(APIView):
+    """Current Wi-Fi connection + visible networks for the kiosk box."""
+
+    authentication_classes = []
+    permission_classes = (OptionalKioskKeyPermission,)
+
+    def get(self, request):
+        from .wifi import get_wifi_status
+
+        rescan = str(request.query_params.get("rescan", "")).lower() in {"1", "true", "yes"}
+        wifi = get_wifi_status(rescan=rescan)
+        network = _get_server_network()
+        # Prefer the authoritative active SSID from the Wi-Fi scan.
+        if wifi.get("ssid"):
+            network["ssid"] = wifi["ssid"]
+            network["interface"] = "wifi"
+        return Response({"network": network, "wifi": wifi})
+
+
+class WifiConnectView(APIView):
+    """Join a Wi-Fi network. Same kiosk access as other kiosk actions.
+
+    Physical access to the kiosk already means full control of the box,
+    so this follows the existing kiosk-cookie model (like stay reset).
+    The UI double-confirms and warns about a brief disconnect.
+    """
+
+    authentication_classes = []
+    permission_classes = (OptionalKioskKeyPermission,)
+
+    def post(self, request):
+        from .wifi import WifiError, connect_wifi
+
+        data = request.data if isinstance(request.data, dict) else {}
+        ssid = str(data.get("ssid", "") or "").strip()
+        password = str(data.get("password", "") or "")
+        security = str(data.get("security", "") or "")[:64]
+        if not ssid or len(ssid) > 64:
+            return Response({"success": False, "detail": "Choose a valid network."}, status=400)
+        if password and (len(password) < 8 or len(password) > 128):
+            return Response({"success": False, "detail": "The password must be 8–128 characters."}, status=400)
+        try:
+            result = connect_wifi(ssid, password, security)
+        except WifiError as exc:
+            code_map = {
+                "invalid_ssid": 400,
+                "invalid_password": 400,
+                "not_found": 404,
+                "auth_failed": 401,
+                "timeout": 504,
+                "unavailable": 503,
+                "connect_failed": 502,
+                "controller_error": 502,
+            }
+            return Response(
+                {"success": False, "code": exc.code, "detail": exc.message},
+                status=code_map.get(exc.code, 502),
+            )
+        return Response({"success": True, **result})
 
 
 class RemotesListView(APIView):

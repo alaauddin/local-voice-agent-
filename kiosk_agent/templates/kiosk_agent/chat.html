@@ -49,10 +49,10 @@
             <span id="batteryValue" dir="ltr">--%</span>
             <span class="battery-charging" id="batteryCharging" aria-hidden="true" hidden>⚡</span>
           </div>
-          <div class="connection-pill" id="connectionPill" role="status">
+          <button class="connection-pill" id="connectionPill" type="button" aria-expanded="false" aria-controls="networkPopover" title="عرض حالة الشبكة">
             <span class="connection-dot mobile-status" id="mobileStatus"></span>
             <span id="connectionText">جاري الاتصال…</span>
-          </div>
+          </button>
           <button class="reload-button" id="reloadButton" type="button" title="إعادة تحميل الصفحة" aria-label="إعادة تحميل الصفحة">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
           </button>
@@ -164,6 +164,51 @@
       <p class="composer-hint" hidden><span id="charCount" aria-live="polite">0 / 4000</span> — اضغط Enter للإرسال، وShift + Enter لسطر جديد</p>
     </section>
   </main>
+
+  <!-- Top-layer network popover: direct child of body so no panel can cover it. -->
+  <div class="network-popover" id="networkPopover" role="dialog" aria-label="حالة الشبكة والخادم" hidden>
+    <header class="network-popover-header">
+      <strong>شبكة الجهاز</strong>
+      <span id="networkUpdatedAt"></span>
+    </header>
+    <dl class="network-popover-list">
+      <div><dt>الحالة</dt><dd id="networkState">…</dd></div>
+      <div><dt>اسم الشبكة (SSID)</dt><dd id="networkSsid" dir="ltr">…</dd></div>
+      <div><dt>عنوان الخادم</dt><dd id="networkIp" dir="ltr">…</dd></div>
+      <div><dt>اسم المضيف</dt><dd id="networkHost" dir="ltr">…</dd></div>
+      <div><dt>اتصالك</dt><dd id="networkClient">…</dd></div>
+      <div><dt>زمن الاستجابة</dt><dd id="networkLatency" dir="ltr">…</dd></div>
+    </dl>
+    <div class="network-popover-actions">
+      <button id="networkRefresh" type="button">تحديث</button>
+      <button id="networkCopy" type="button">نسخ التشخيص</button>
+    </div>
+    <div class="wifi-control">
+      <div class="wifi-control-header">
+        <strong>تغيير شبكة الواي فاي</strong>
+        <button id="wifiRescan" type="button" aria-label="إعادة البحث عن الشبكات">بحث مجدد</button>
+      </div>
+      <p class="wifi-warning">تنبيه: تغيير الشبكة سيفصل الجهاز مؤقتاً.</p>
+      <ul class="wifi-list" id="wifiList" aria-label="الشبكات المتاحة">
+        <li class="wifi-empty">اضغط «تحديث» لعرض الشبكات…</li>
+      </ul>
+      <form class="wifi-join" id="wifiJoinForm" hidden>
+        <strong id="wifiSelectedSsid" dir="ltr"></strong>
+        <label class="wifi-field">
+          <span>كلمة مرور الشبكة</span>
+          <input id="wifiPassword" type="password" name="password" dir="ltr"
+            autocomplete="off" minlength="8" maxlength="128"
+            placeholder="8 أحرف على الأقل">
+        </label>
+        <p class="wifi-message" id="wifiMessage" role="status" aria-live="polite" hidden></p>
+        <div class="wifi-join-actions">
+          <button type="button" id="wifiCancel">إلغاء</button>
+          <button type="submit" id="wifiConnect">اتصال</button>
+        </div>
+      </form>
+    </div>
+    <p class="network-popover-note">للصيانة فقط — اضغط خارج البطاقة للإغلاق</p>
+  </div>
 
   <dialog id="resetDialog">
     <div class="dialog-icon">✓</div>
